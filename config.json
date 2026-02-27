@@ -21,6 +21,17 @@
       "alarm_max": 40.0
     }
   ],
+  "email": {
+    "enabled": false,
+    "smtp_host": "smtp.gmail.com",
+    "smtp_port": 587,
+    "use_tls": true,
+    "use_ssl": false,
+    "username": "",
+    "password": "",
+    "from_address": "",
+    "to_address": ""
+  },
   "web": {
     "host": "0.0.0.0",
     "port": 5000,

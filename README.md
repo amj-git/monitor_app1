@@ -185,7 +185,7 @@ Press **Ctrl+C** to stop. The web server shuts down automatically when the main 
 **Console output notes:**
 - `[ALARM]` appears when a reading is outside its configured `alarm_min`/`alarm_max` range
 - `-> Email alert would be sent` prints when an alarm first triggers; it does not repeat while
-  the alarm is sustained (actual email sending will be added in a future task)
+  the alarm is sustained. When email is configured and `enabled: true`, an SMTP alert is also sent.
 - DS18B20 read errors on Windows are logged to the console and do not crash the application
 
 ---
@@ -255,6 +255,97 @@ Paste the output string into `config.json` as the value of `"password_hash"`, th
 
 ---
 
+## Email Alerts
+
+The app can send an email when a sensor first breaches its alarm threshold. A
+**1-day cooldown** prevents repeated emails while the alarm is sustained: once
+the sensor returns to normal and re-triggers, the next alert is sent immediately.
+
+### What triggers an alert
+
+1. A sensor reading falls outside its `alarm_min` / `alarm_max` range for the
+   first time (or after a 1-day cooldown since the last alert).
+2. `alarm_manager.py` signals `main.py` that an email should go out.
+3. `main.py` calls `Emailer.send_alert()` with the sensor name, reading, and
+   threshold values.
+
+### SMTP configuration
+
+Add (or edit) the `"email"` block in `config.json`:
+
+```json
+"email": {
+  "enabled": false,
+  "smtp_host": "smtp.gmail.com",
+  "smtp_port": 587,
+  "use_tls": true,
+  "use_ssl": false,
+  "username": "",
+  "password": "",
+  "from_address": "",
+  "to_address": ""
+}
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Master on/off switch — set to `true` to activate |
+| `smtp_host` | string | `""` | SMTP server hostname |
+| `smtp_port` | int | `587` | SMTP port (587 = STARTTLS, 465 = SSL) |
+| `use_tls` | bool | `true` | Call STARTTLS after connecting (standard for port 587) |
+| `use_ssl` | bool | `false` | Wrap connection in SSL from the start (for port 465) |
+| `username` | string | `""` | SMTP login username; leave empty to skip authentication |
+| `password` | string | `""` | SMTP login password |
+| `from_address` | string | `""` | `From:` address in the email |
+| `to_address` | string | `""` | Recipient address |
+
+### Gmail example
+
+Gmail requires an **App Password** when 2-Step Verification is enabled on the
+sending account. Generate one at
+`https://myaccount.google.com/apppasswords` and use it as `"password"`.
+
+```json
+"email": {
+  "enabled": true,
+  "smtp_host": "smtp.gmail.com",
+  "smtp_port": 587,
+  "use_tls": true,
+  "use_ssl": false,
+  "username": "your.address@gmail.com",
+  "password": "xxxx xxxx xxxx xxxx",
+  "from_address": "your.address@gmail.com",
+  "to_address": "recipient@example.com"
+}
+```
+
+### Generic SMTP example (port 465 / SSL)
+
+```json
+"email": {
+  "enabled": true,
+  "smtp_host": "mail.example.com",
+  "smtp_port": 465,
+  "use_tls": false,
+  "use_ssl": true,
+  "username": "alerts@example.com",
+  "password": "secret",
+  "from_address": "alerts@example.com",
+  "to_address": "admin@example.com"
+}
+```
+
+### Enabling email alerts
+
+1. Fill in all required fields (`smtp_host`, `from_address`, `to_address`, credentials).
+2. Set `"enabled": true`.
+3. Restart `main.py`.
+
+When `enabled` is `false` (the default), the app runs normally and prints
+`-> Email alert would be sent: <sensor>` to the console instead of sending mail.
+
+---
+
 ## Project Structure
 
 ```
@@ -275,6 +366,7 @@ monitor_app1/
 │   │   └── static/
 │   │       └── style.css        # Minimal stylesheet, no CDN
 │   ├── alarm_manager.py         # Alarm state tracking + email cooldown logic
+│   ├── emailer.py               # SMTP email delivery (stdlib only)
 │   ├── history_db.py            # SQLite persistence (WAL mode)
 │   └── sensor_manager.py        # Loads config, polls sensors, drives alarms
 ├── data/
