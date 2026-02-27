@@ -1,14 +1,15 @@
 # Equipment Monitor
 
 A Raspberry Pi sensor monitoring application. Polls temperature sensors on a configurable
-interval, tracks alarm states, and (in future) sends email alerts and serves a web GUI.
+interval, tracks alarm states, persists readings to SQLite, and serves a web GUI for live
+monitoring and history browsing.
 
 ---
 
 ## Requirements
 
 - Python 3.7 or later
-- No third-party packages are needed at this stage — the sensor framework is stdlib-only
+- Flask 2.2 (installed via `requirements.txt` / `requirements-dev.txt`)
 
 ---
 
@@ -35,8 +36,6 @@ venv\Scripts\activate
 ```
 pip install -r requirements-dev.txt
 ```
-
-*(The file is currently empty — no packages to install. This step will matter once Flask is added.)*
 
 ---
 
@@ -83,17 +82,17 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-*(The file is currently empty — no packages to install. This step will matter once Flask is added.)*
-
 ---
 
 ## Configuration
 
-Edit `config.json` to set the polling interval and configure your sensors:
+Edit `config.json` to configure sensors and the web GUI:
 
 ```json
 {
   "polling_interval": 30,
+  "db_path": "data/sensor_history.db",
+  "max_db_size_mb": 50.0,
   "sensors": [
     {
       "id": "sim_temp_1",
@@ -112,19 +111,40 @@ Edit `config.json` to set the polling interval and configure your sensors:
       "alarm_min": 5.0,
       "alarm_max": 40.0
     }
-  ]
+  ],
+  "web": {
+    "host": "0.0.0.0",
+    "port": 5000,
+    "secret_key": "change-me-in-production",
+    "username": "admin",
+    "password_hash": "<generated — see Changing the password below>"
+  }
 }
 ```
+
+### Sensor fields
 
 | Field | Description |
 |---|---|
 | `polling_interval` | Seconds between sensor reads |
+| `db_path` | Path to the SQLite history database |
+| `max_db_size_mb` | Old rows are trimmed when the DB exceeds this size |
 | `id` | Unique identifier for this sensor |
-| `name` | Display name shown in output |
+| `name` | Display name shown in the web GUI and console output |
 | `type` | `simulated_temperature` or `ds18b20` |
 | `alarm_min` / `alarm_max` | Reading outside this range triggers an alarm |
 | `sim_min` / `sim_max` | *(simulated only)* Range of randomly generated values |
 | `device_id` | *(DS18B20 only)* Device folder name from `/sys/bus/w1/devices/` |
+
+### Web fields
+
+| Field | Description |
+|---|---|
+| `host` | Interface to bind (`0.0.0.0` = all interfaces, `127.0.0.1` = localhost only) |
+| `port` | TCP port for the web server (default 5000) |
+| `secret_key` | Flask session secret — change this before exposing to a network |
+| `username` | Login username |
+| `password_hash` | Werkzeug password hash — see *Changing the password* below |
 
 ### On Windows
 
@@ -136,6 +156,7 @@ Edit `config.json` to set the polling interval and configure your sensors:
 
 - Update the DS18B20 `device_id` to match the actual device found in `/sys/bus/w1/devices/`
 - Remove or comment out the `simulated_temperature` sensor if not needed
+- Set `host` to `"0.0.0.0"` so the GUI is accessible from other devices on the LAN
 
 ---
 
@@ -147,25 +168,90 @@ With the virtual environment active, run from the project root:
 python main.py
 ```
 
-Example output:
+Expected startup output:
 
 ```
+INFO monitor.history_db: HistoryDB opened: data/sensor_history.db
+Web GUI running at http://0.0.0.0:5000/
 Equipment Monitor started. Polling every 30s. Ctrl+C to stop.
 
 [14:23:01] Simulated Temp 1: 31.4°C  [ALARM]
-  → Email alert would be sent: Simulated Temp 1
+  -> Email alert would be sent: Simulated Temp 1
 [14:23:01] Server Room Temp: 22.1°C
-[14:23:31] Simulated Temp 1: 27.8°C
-[14:23:31] Server Room Temp: 22.3°C
 ```
 
-Press **Ctrl+C** to stop.
+Press **Ctrl+C** to stop. The web server shuts down automatically when the main process exits.
 
-**Notes:**
+**Console output notes:**
 - `[ALARM]` appears when a reading is outside its configured `alarm_min`/`alarm_max` range
-- `→ Email alert would be sent` prints when an alarm first triggers; it does not repeat while
+- `-> Email alert would be sent` prints when an alarm first triggers; it does not repeat while
   the alarm is sustained (actual email sending will be added in a future task)
 - DS18B20 read errors on Windows are logged to the console and do not crash the application
+
+---
+
+## Web GUI
+
+Open a browser and navigate to `http://localhost:5000/` (or replace `localhost` with the
+Pi's IP address when accessing from another machine).
+
+### Logging in
+
+You will be redirected to the login page. Enter the credentials configured in `config.json`.
+The default credentials are:
+
+| Field | Value |
+|---|---|
+| Username | `admin` |
+| Password | `admin` |
+
+After a successful login you are taken to the Live view. Failed attempts are logged to the
+console.
+
+### Live view (`/`)
+
+Displays the most recent reading from every sensor in a table, refreshed automatically
+every 5 seconds without reloading the page.
+
+| Column | Description |
+|---|---|
+| Sensor | Display name from `config.json` |
+| ID | Internal sensor ID |
+| Value | Most recent reading |
+| Unit | Unit of measurement (e.g. `°C`) |
+| Status | `OK` or `ALARM` |
+| Timestamp | ISO-8601 time of the reading |
+
+Rows with an active alarm are highlighted in red.
+
+### History browser (`/history`)
+
+Browse and filter the full reading history stored in SQLite.
+
+1. Optionally select a specific sensor from the **Sensor** drop-down (leave blank for all sensors)
+2. Optionally set **From** and **To** datetime filters
+3. Click **Filter** — up to 2000 rows are returned, sorted newest first
+4. Click **Download CSV** to download the same result set as a CSV file
+
+The CSV contains columns: `timestamp`, `sensor_id`, `name`, `value`, `unit`, `alarming`.
+
+### Logging out
+
+Click **Logout** in the navigation bar. You are returned to the login page and the session
+is cleared.
+
+---
+
+## Changing the password
+
+Generate a new hash from the command line (with the virtual environment active):
+
+```
+python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('your-new-password'))"
+```
+
+Paste the output string into `config.json` as the value of `"password_hash"`, then restart
+`main.py`.
 
 ---
 
@@ -175,16 +261,29 @@ Press **Ctrl+C** to stop.
 monitor_app1/
 ├── monitor/
 │   ├── sensors/
-│   │   ├── base.py          # BaseSensor ABC + SensorReading dataclass
-│   │   ├── simulated.py     # SimulatedTemperatureSensor
-│   │   └── ds18b20.py       # DS18B20Sensor (1-wire, Pi only)
-│   ├── alarm_manager.py     # Alarm state tracking + email cooldown logic
-│   └── sensor_manager.py    # Loads config, polls sensors, drives alarms
-├── config.json              # Sensor list and polling interval
-├── main.py                  # CLI entry point
-├── requirements.txt         # Pi production dependencies
-├── requirements-dev.txt     # Windows dev dependencies
-└── REQUIREMENTS.md          # Full project requirements document
+│   │   ├── base.py              # BaseSensor ABC + SensorReading dataclass
+│   │   ├── simulated.py         # SimulatedTemperatureSensor
+│   │   └── ds18b20.py           # DS18B20Sensor (1-wire, Pi only)
+│   ├── web/
+│   │   ├── __init__.py          # Flask app factory (create_app)
+│   │   ├── routes.py            # Route handlers and login_required decorator
+│   │   ├── templates/
+│   │   │   ├── base.html        # Shared layout and nav bar
+│   │   │   ├── login.html       # Login form
+│   │   │   ├── live.html        # Live sensor table (JS auto-refresh)
+│   │   │   └── history.html     # History filter form + table + CSV link
+│   │   └── static/
+│   │       └── style.css        # Minimal stylesheet, no CDN
+│   ├── alarm_manager.py         # Alarm state tracking + email cooldown logic
+│   ├── history_db.py            # SQLite persistence (WAL mode)
+│   └── sensor_manager.py        # Loads config, polls sensors, drives alarms
+├── data/
+│   └── sensor_history.db        # SQLite database (git-ignored)
+├── config.json                  # Sensor list, polling interval, web settings
+├── main.py                      # Entry point; starts Flask thread then poll loop
+├── requirements.txt             # Pi production dependencies
+├── requirements-dev.txt         # Windows dev dependencies
+└── REQUIREMENTS.md              # Full project requirements document
 ```
 
 ## License
