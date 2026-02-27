@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}History — Equipment Monitor{% endblock %}
+{% block content %}
+<h2>Sensor History</h2>
+<form id="filter-form" onsubmit="return false;">
+  <label for="sensor_id">Sensor</label>
+  <select id="sensor_id" name="sensor_id">
+    <option value="">— All sensors —</option>
+    {% for sid, sname in sensor_names.items() %}
+    <option value="{{ sid }}">{{ sname }}</option>
+    {% endfor %}
+  </select>
+  <label for="start">From</label>
+  <input type="datetime-local" id="start" name="start">
+  <label for="end">To</label>
+  <input type="datetime-local" id="end" name="end">
+  <button type="button" onclick="doFilter()">Filter</button>
+  <a id="csv-link" href="#" class="button">Download CSV</a>
+</form>
+
+<p id="row-count"></p>
+<table>
+  <thead>
+    <tr>
+      <th>Timestamp</th>
+      <th>Sensor</th>
+      <th>ID</th>
+      <th class="right">Value</th>
+      <th>Unit</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody id="hist-tbody">
+    <tr><td colspan="6">Use the form above to load history.</td></tr>
+  </tbody>
+</table>
+
+<script>
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function buildQuery() {
+  var params = [];
+  var sid = document.getElementById("sensor_id").value;
+  var start = document.getElementById("start").value;
+  var end = document.getElementById("end").value;
+  if (sid)   params.push("sensor_id=" + encodeURIComponent(sid));
+  if (start) params.push("start="     + encodeURIComponent(start));
+  if (end)   params.push("end="       + encodeURIComponent(end));
+  return params.length ? "?" + params.join("&") : "";
+}
+
+function doFilter() {
+  var qs = buildQuery();
+  document.getElementById("csv-link").href = "/api/history/csv" + qs;
+
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", "/api/history" + qs, true);
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState !== 4) return;
+    if (xhr.status !== 200) {
+      document.getElementById("row-count").textContent = "Error fetching data.";
+      return;
+    }
+    var rows;
+    try { rows = JSON.parse(xhr.responseText); } catch(e) { return; }
+    document.getElementById("row-count").textContent = rows.length + " row(s)";
+    var tbody = document.getElementById("hist-tbody");
+    var html = "";
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var cls = r.alarming ? " class=\"alarm\"" : "";
+      var status = r.alarming ? "ALARM" : "OK";
+      html += "<tr" + cls + ">"
+        + "<td>" + escapeHtml(r.timestamp) + "</td>"
+        + "<td>" + escapeHtml(r.name) + "</td>"
+        + "<td>" + escapeHtml(r.sensor_id) + "</td>"
+        + "<td class=\"right\">" + escapeHtml(r.value) + "</td>"
+        + "<td>" + escapeHtml(r.unit) + "</td>"
+        + "<td>" + status + "</td>"
+        + "</tr>";
+    }
+    tbody.innerHTML = html || "<tr><td colspan=\"6\">No results.</td></tr>";
+  };
+  xhr.send();
+}
+</script>
+{% endblock %}

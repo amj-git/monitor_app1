@@ -32,7 +32,9 @@ class HistoryDB:
         if parent:
             os.makedirs(parent, exist_ok=True)
 
-        self._conn = sqlite3.connect(db_path)
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.row_factory = sqlite3.Row
         self._conn.execute(_CREATE_TABLE)
         self._conn.execute(_CREATE_INDEX)
         self._conn.commit()
@@ -71,6 +73,42 @@ class HistoryDB:
         if total_deleted:
             logger.info("DB trim: deleted %d old rows", total_deleted)
         return total_deleted
+
+    def get_latest_readings(self) -> list:
+        cursor = self._conn.execute(
+            "SELECT sensor_id, value, unit, alarming, timestamp "
+            "FROM readings "
+            "WHERE id IN (SELECT MAX(id) FROM readings GROUP BY sensor_id) "
+            "ORDER BY sensor_id"
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_history(
+        self,
+        sensor_id: str | None = None,
+        start: str | None = None,
+        end: str | None = None,
+        limit: int = 2000,
+    ) -> list:
+        conditions: list[str] = []
+        params: list = []
+        if sensor_id:
+            conditions.append("sensor_id = ?")
+            params.append(sensor_id)
+        if start:
+            conditions.append("timestamp >= ?")
+            params.append(start)
+        if end:
+            conditions.append("timestamp <= ?")
+            params.append(end + ":59")
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        cursor = self._conn.execute(
+            f"SELECT sensor_id, value, unit, alarming, timestamp "
+            f"FROM readings {where} "
+            f"ORDER BY timestamp DESC LIMIT ?",
+            params + [limit],
+        )
+        return [dict(row) for row in cursor.fetchall()]
 
     def close(self) -> None:
         self._conn.close()

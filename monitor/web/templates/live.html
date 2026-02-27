@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Live — Equipment Monitor{% endblock %}
+{% block content %}
+<h2>Live Sensor Readings</h2>
+<p id="last-updated">Updating&hellip;</p>
+<table>
+  <thead>
+    <tr>
+      <th>Sensor</th>
+      <th>ID</th>
+      <th class="right">Value</th>
+      <th>Unit</th>
+      <th>Status</th>
+      <th>Timestamp</th>
+    </tr>
+  </thead>
+  <tbody id="live-tbody">
+    <tr><td colspan="6">Loading&hellip;</td></tr>
+  </tbody>
+</table>
+
+<script>
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function fetchLive() {
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", "/api/live", true);
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState !== 4) return;
+    if (xhr.status !== 200) {
+      document.getElementById("last-updated").textContent = "Error fetching data.";
+      return;
+    }
+    var rows;
+    try { rows = JSON.parse(xhr.responseText); } catch(e) { return; }
+    var tbody = document.getElementById("live-tbody");
+    var html = "";
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var cls = r.alarming ? " class=\"alarm\"" : "";
+      var status = r.alarming ? "ALARM" : "OK";
+      html += "<tr" + cls + ">"
+        + "<td>" + escapeHtml(r.name) + "</td>"
+        + "<td>" + escapeHtml(r.sensor_id) + "</td>"
+        + "<td class=\"right\">" + escapeHtml(r.value) + "</td>"
+        + "<td>" + escapeHtml(r.unit) + "</td>"
+        + "<td>" + status + "</td>"
+        + "<td>" + escapeHtml(r.timestamp) + "</td>"
+        + "</tr>";
+    }
+    tbody.innerHTML = html || "<tr><td colspan=\"6\">No data yet.</td></tr>";
+    var now = new Date();
+    document.getElementById("last-updated").textContent =
+      "Last updated: " + now.toLocaleTimeString();
+  };
+  xhr.send();
+}
+
+fetchLive();
+setInterval(fetchLive, 5000);
+</script>
+{% endblock %}
