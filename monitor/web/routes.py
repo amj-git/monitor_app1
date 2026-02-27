@@ -4,15 +4,20 @@ import csv
 import functools
 import io
 import logging
+import os
+import re
+from datetime import datetime
 
 from flask import (
     Blueprint,
     Response,
+    abort,
     current_app,
     jsonify,
     redirect,
     render_template,
     request,
+    send_from_directory,
     session,
     url_for,
 )
@@ -81,6 +86,25 @@ def api_live():
     return jsonify(rows)
 
 
+_PHOTO_RE = re.compile(
+    r'^photo_(\d{8}_\d{6})_([^_]+)(?:_(.+))?\.jpe?g$', re.IGNORECASE
+)
+
+
+def _parse_photo_name(filename):
+    """Return dict with trigger/sensor_id/timestamp, or None if unrecognised."""
+    m = _PHOTO_RE.match(filename)
+    if not m:
+        return None
+    ts_str, trigger, sensor_id = m.group(1), m.group(2), m.group(3)
+    try:
+        ts = datetime.strptime(ts_str, "%Y%m%d_%H%M%S")
+        timestamp = ts.strftime("%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        timestamp = ts_str
+    return {"trigger": trigger, "sensor_id": sensor_id or "", "timestamp": timestamp}
+
+
 # ---------------------------------------------------------------------------
 # History
 # ---------------------------------------------------------------------------
@@ -142,3 +166,83 @@ def api_history_csv():
         mimetype="text/csv",
         headers={"Content-Disposition": "attachment; filename=history.csv"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Photos
+# ---------------------------------------------------------------------------
+
+@bp.route("/photos")
+@login_required
+def photos():
+    return render_template("photos.html")
+
+
+@bp.route("/api/photos")
+@login_required
+def api_photos():
+    photo_dir = current_app.config["PHOTO_DIR"]
+    result = []
+    try:
+        filenames = os.listdir(photo_dir)
+    except OSError:
+        return jsonify([])
+    for filename in filenames:
+        if not filename.lower().endswith((".jpg", ".jpeg")):
+            continue
+        filepath = os.path.join(photo_dir, filename)
+        if not os.path.isfile(filepath):
+            continue
+        info = _parse_photo_name(filename)
+        size_kb = round(os.path.getsize(filepath) / 1024, 1)
+        result.append({
+            "filename": filename,
+            "trigger": info["trigger"] if info else "",
+            "sensor_id": info["sensor_id"] if info else "",
+            "timestamp": info["timestamp"] if info else "",
+            "size_kb": size_kb,
+            "url": url_for("main.photo_file", filename=filename),
+            "download_url": url_for("main.photo_download", filename=filename),
+        })
+    result.sort(key=lambda p: p["filename"], reverse=True)
+    return jsonify(result)
+
+
+@bp.route("/photos/files/<filename>")
+@login_required
+def photo_file(filename):
+    photo_dir = current_app.config["PHOTO_DIR"]
+    if os.path.basename(filename) != filename or \
+            not filename.lower().endswith((".jpg", ".jpeg")):
+        abort(400)
+    return send_from_directory(os.path.abspath(photo_dir), filename)
+
+
+@bp.route("/photos/files/<filename>/download")
+@login_required
+def photo_download(filename):
+    photo_dir = current_app.config["PHOTO_DIR"]
+    if os.path.basename(filename) != filename or \
+            not filename.lower().endswith((".jpg", ".jpeg")):
+        abort(400)
+    return send_from_directory(
+        os.path.abspath(photo_dir), filename,
+        as_attachment=True, download_name=filename,
+    )
+
+
+@bp.route("/api/photos/<filename>/delete", methods=["POST"])
+@login_required
+def delete_photo(filename):
+    photo_dir = current_app.config["PHOTO_DIR"]
+    safe = os.path.basename(filename)
+    if safe != filename or not safe.lower().endswith((".jpg", ".jpeg")):
+        return jsonify({"ok": False, "error": "invalid filename"}), 400
+    filepath = os.path.join(photo_dir, safe)
+    try:
+        os.remove(filepath)
+        logger.info("Deleted photo: %s", filepath)
+        return jsonify({"ok": True})
+    except OSError as exc:
+        logger.error("Failed to delete photo %s: %s", filepath, exc)
+        return jsonify({"ok": False, "error": str(exc)}), 500

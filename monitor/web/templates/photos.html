@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Photos — Equipment Monitor{% endblock %}
+{% block content %}
+<h2>Photo Browser</h2>
+
+<p id="photo-count" data-count="0">Loading…</p>
+<table>
+  <thead>
+    <tr>
+      <th>Preview</th>
+      <th>Filename</th>
+      <th>Trigger</th>
+      <th>Sensor</th>
+      <th>Timestamp</th>
+      <th class="right">Size (KB)</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody id="photo-tbody">
+    <tr><td colspan="7">Loading…</td></tr>
+  </tbody>
+</table>
+
+<script>
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function updateCount(n) {
+  var el = document.getElementById("photo-count");
+  el.setAttribute("data-count", n);
+  el.textContent = n + " photo(s)";
+}
+
+function loadPhotos() {
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", "/api/photos", true);
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState !== 4) return;
+    var tbody = document.getElementById("photo-tbody");
+    if (xhr.status !== 200) {
+      tbody.innerHTML = '<tr><td colspan="7">Error loading photos.</td></tr>';
+      updateCount(0);
+      return;
+    }
+    var photos;
+    try { photos = JSON.parse(xhr.responseText); } catch(e) {
+      tbody.innerHTML = '<tr><td colspan="7">Error parsing response.</td></tr>';
+      updateCount(0);
+      return;
+    }
+    updateCount(photos.length);
+    if (photos.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7">No photos yet.</td></tr>';
+      return;
+    }
+    var html = "";
+    for (var i = 0; i < photos.length; i++) {
+      var p = photos[i];
+      html += "<tr>"
+        + '<td><a href="' + escapeHtml(p.url) + '" target="_blank">'
+        +   '<img class="photo-thumb" src="' + escapeHtml(p.url) + '" alt="photo">'
+        + '</a></td>'
+        + "<td>" + escapeHtml(p.filename) + "</td>"
+        + "<td>" + escapeHtml(p.trigger) + "</td>"
+        + "<td>" + escapeHtml(p.sensor_id) + "</td>"
+        + "<td>" + escapeHtml(p.timestamp) + "</td>"
+        + '<td class="right">' + escapeHtml(p.size_kb) + "</td>"
+        + '<td class="photo-actions">'
+        +   '<a href="' + escapeHtml(p.url) + '" target="_blank" class="button">View</a>'
+        +   '<a href="' + escapeHtml(p.download_url) + '" class="button">Download</a>'
+        +   '<button class="delete" data-filename="' + escapeHtml(p.filename) + '">Delete</button>'
+        + "</td>"
+        + "</tr>";
+    }
+    tbody.innerHTML = html;
+  };
+  xhr.send();
+}
+
+document.getElementById("photo-tbody").addEventListener("click", function(e) {
+  var btn = e.target;
+  if (!btn || btn.tagName !== "BUTTON" || !btn.classList.contains("delete")) return;
+  var filename = btn.getAttribute("data-filename");
+  if (!confirm("Delete " + filename + "?")) return;
+  var xhr = new XMLHttpRequest();
+  xhr.open("POST", "/api/photos/" + encodeURIComponent(filename) + "/delete", true);
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState !== 4) return;
+    var resp;
+    try { resp = JSON.parse(xhr.responseText); } catch(e) { resp = {}; }
+    if (xhr.status === 200 && resp.ok) {
+      var row = btn.closest("tr");
+      if (row) row.parentNode.removeChild(row);
+      var countEl = document.getElementById("photo-count");
+      var n = parseInt(countEl.getAttribute("data-count"), 10) - 1;
+      updateCount(n < 0 ? 0 : n);
+      if (n <= 0) {
+        document.getElementById("photo-tbody").innerHTML =
+          '<tr><td colspan="7">No photos yet.</td></tr>';
+      }
+    } else {
+      alert("Delete failed: " + (resp.error || xhr.status));
+    }
+  };
+  xhr.send();
+});
+
+loadPhotos();
+</script>
+{% endblock %}

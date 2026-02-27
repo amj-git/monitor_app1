@@ -159,8 +159,32 @@ button:hover, a.button:hover {
   margin-bottom: 0.5rem;
 }
 
-#last-updated, #row-count {
+#last-updated, #row-count, #photo-count {
   color: #555;
   font-size: 0.85em;
   margin: 0.5rem 0;
+}
+
+/* Photo browser */
+.photo-thumb {
+  max-height: 60px;
+  max-width: 80px;
+  display: block;
+}
+
+.photo-actions {
+  white-space: nowrap;
+}
+
+.photo-actions .button,
+.photo-actions button {
+  margin-right: 0.25rem;
+}
+
+button.delete {
+  background: #7a0000;
+}
+
+button.delete:hover {
+  background: #a00;
 }

@@ -12,6 +12,7 @@
     {% if session.get('logged_in') %}
     <a href="{{ url_for('main.live') }}" class="nav-link">Live</a>
     <a href="{{ url_for('main.history') }}" class="nav-link">History</a>
+    <a href="{{ url_for('main.photos') }}" class="nav-link">Photos</a>
     <a href="{{ url_for('main.logout') }}" class="nav-link">Logout</a>
     {% endif %}
   </nav>
