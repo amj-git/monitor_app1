@@ -19,7 +19,6 @@ def main():
         config = json.load(f)
 
     manager = SensorManager(config_path="config.json")
-    interval = manager.polling_interval
 
     camera = CameraManager(config.get("camera", {}))
     emailer = Emailer(config.get("email", {}))
@@ -36,6 +35,9 @@ def main():
         "sensor_names": sensor_names,
         "photo_dir": config.get("camera", {}).get("photo_dir", "data/photos"),
         "camera": camera,
+        "sensor_manager": manager,
+        "emailer": emailer,
+        "config_path": "config.json",
     }
     app = create_app(flask_config)
     host = web_cfg.get("host", "0.0.0.0")
@@ -48,7 +50,7 @@ def main():
     ).start()
     print(f"Web GUI running at http://{host}:{port}/")
 
-    print(f"Equipment Monitor started. Polling every {interval}s. Ctrl+C to stop.\n")
+    print(f"Equipment Monitor started. Polling every {manager.polling_interval}s. Ctrl+C to stop.\n")
 
     try:
         while True:
@@ -78,7 +80,7 @@ def main():
             camera.maybe_capture_periodic()
             camera.cleanup_if_needed()
 
-            time.sleep(interval)
+            time.sleep(manager.polling_interval)
 
     except KeyboardInterrupt:
         print("\nStopped.")

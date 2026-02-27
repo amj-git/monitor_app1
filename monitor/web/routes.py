@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import copy
 import csv
 import functools
 import io
+import json
 import logging
 import os
 import re
+import tempfile
 from datetime import datetime
 
 from flask import (
@@ -271,3 +274,219 @@ def delete_photo(filename):
     except OSError as exc:
         logger.error("Failed to delete photo %s: %s", filepath, exc)
         return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+# ---------------------------------------------------------------------------
+# Settings
+# ---------------------------------------------------------------------------
+
+def _read_config():
+    with open(current_app.config["CONFIG_PATH"]) as f:
+        return json.load(f)
+
+
+def _write_config(data):
+    path = current_app.config["CONFIG_PATH"]
+    dir_ = os.path.dirname(os.path.abspath(path))
+    fd, tmp = tempfile.mkstemp(dir=dir_, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, path)
+    except Exception:
+        os.unlink(tmp)
+        raise
+
+
+def _build_settings_response(cfg):
+    sensors = []
+    for s in cfg.get("sensors", []):
+        sensors.append({
+            "id": s.get("id", ""),
+            "type": s.get("type", ""),
+            "name": s.get("name", ""),
+            "alarm_min": s.get("alarm_min"),
+            "alarm_max": s.get("alarm_max"),
+        })
+    cam = cfg.get("camera", {})
+    email_cfg = cfg.get("email", {})
+    return {
+        "polling_interval": cfg.get("polling_interval", 30),
+        "max_db_size_mb": float(cfg.get("max_db_size_mb", 50.0)),
+        "sensors": sensors,
+        "camera": {
+            "enabled": cam.get("enabled", False),
+            "type": cam.get("type", "simulated"),
+            "photo_dir": cam.get("photo_dir", "data/photos"),
+            "periodic_interval_hours": float(cam.get("periodic_interval_hours", 6.0)),
+            "max_photo_dir_size_mb": float(cam.get("max_photo_dir_size_mb", 100.0)),
+        },
+        "email": {
+            "enabled": email_cfg.get("enabled", False),
+            "smtp_host": email_cfg.get("smtp_host", ""),
+            "smtp_port": int(email_cfg.get("smtp_port", 587)),
+            "use_tls": email_cfg.get("use_tls", True),
+            "use_ssl": email_cfg.get("use_ssl", False),
+            "username": email_cfg.get("username", ""),
+            "password": email_cfg.get("password", ""),
+            "from_address": email_cfg.get("from_address", ""),
+            "to_address": email_cfg.get("to_address", ""),
+        },
+    }
+
+
+def _validate_settings(data):
+    try:
+        pi = int(data.get("polling_interval"))
+        if not (5 <= pi <= 3600):
+            return "polling_interval must be between 5 and 3600"
+    except (TypeError, ValueError):
+        return "polling_interval must be an integer between 5 and 3600"
+
+    try:
+        db_mb = float(data.get("max_db_size_mb", 0))
+        if db_mb <= 0:
+            return "max_db_size_mb must be > 0"
+    except (TypeError, ValueError):
+        return "max_db_size_mb must be a number"
+
+    cam = data.get("camera", {})
+    try:
+        ph = float(cam.get("periodic_interval_hours", 0))
+        if ph <= 0:
+            return "camera.periodic_interval_hours must be > 0"
+    except (TypeError, ValueError):
+        return "camera.periodic_interval_hours must be a number"
+
+    try:
+        ms = float(cam.get("max_photo_dir_size_mb", 0))
+        if ms <= 0:
+            return "camera.max_photo_dir_size_mb must be > 0"
+    except (TypeError, ValueError):
+        return "camera.max_photo_dir_size_mb must be a number"
+
+    email_cfg = data.get("email", {})
+    try:
+        port = int(email_cfg.get("smtp_port"))
+        if not (1 <= port <= 65535):
+            return "email.smtp_port must be between 1 and 65535"
+    except (TypeError, ValueError):
+        return "email.smtp_port must be an integer between 1 and 65535"
+
+    for s in data.get("sensors", []):
+        name = s.get("name", "")
+        if not isinstance(name, str) or not name.strip():
+            return "Sensor name must be a non-empty string"
+        alarm_min = s.get("alarm_min")
+        alarm_max = s.get("alarm_max")
+        if alarm_min is not None and alarm_max is not None:
+            try:
+                if float(alarm_min) >= float(alarm_max):
+                    return f"alarm_min must be less than alarm_max for sensor '{name}'"
+            except (TypeError, ValueError):
+                return f"alarm values must be numbers for sensor '{name}'"
+
+    return None
+
+
+def _merge_settings(full, data):
+    merged = copy.deepcopy(full)
+    merged["polling_interval"] = int(data["polling_interval"])
+    merged["max_db_size_mb"] = float(data["max_db_size_mb"])
+
+    sensors_by_id = {s.get("id"): s for s in data.get("sensors", [])}
+    for s in merged.get("sensors", []):
+        sid = s.get("id")
+        if sid in sensors_by_id:
+            patch = sensors_by_id[sid]
+            s["name"] = patch["name"]
+            for key in ("alarm_min", "alarm_max"):
+                if key in patch:
+                    val = patch[key]
+                    s[key] = float(val) if val is not None else None
+
+    cam_data = data.get("camera", {})
+    cam = merged.setdefault("camera", {})
+    cam["enabled"] = bool(cam_data.get("enabled", False))
+    cam["periodic_interval_hours"] = float(cam_data.get("periodic_interval_hours", 6.0))
+    cam["max_photo_dir_size_mb"] = float(cam_data.get("max_photo_dir_size_mb", 100.0))
+
+    email_data = data.get("email", {})
+    email = merged.setdefault("email", {})
+    email["enabled"] = bool(email_data.get("enabled", False))
+    email["smtp_host"] = email_data.get("smtp_host", "")
+    email["smtp_port"] = int(email_data.get("smtp_port", 587))
+    email["use_tls"] = bool(email_data.get("use_tls", True))
+    email["use_ssl"] = bool(email_data.get("use_ssl", False))
+    email["username"] = email_data.get("username", "")
+    email["password"] = email_data.get("password", "")
+    email["from_address"] = email_data.get("from_address", "")
+    email["to_address"] = email_data.get("to_address", "")
+
+    return merged
+
+
+def _apply_settings(data):
+    manager = current_app.config.get("SENSOR_MANAGER")
+    emailer = current_app.config.get("EMAILER")
+    camera = current_app.config.get("CAMERA")
+
+    if manager is not None:
+        manager.polling_interval = int(data["polling_interval"])
+        manager._db._max_bytes = float(data["max_db_size_mb"]) * 1024 * 1024
+
+        sensors_by_id = {s.get("id"): s for s in data.get("sensors", [])}
+        for sensor in manager._sensors:
+            sid = sensor.sensor_id
+            if sid in sensors_by_id:
+                patch = sensors_by_id[sid]
+                sensor.name = patch["name"]
+                sensor.alarm_min = patch.get("alarm_min")
+                sensor.alarm_max = patch.get("alarm_max")
+                current_app.config["SENSOR_NAMES"][sid] = patch["name"]
+
+    if camera is not None:
+        cam_data = data.get("camera", {})
+        camera._enabled = bool(cam_data.get("enabled", False))
+        camera._periodic_hours = float(cam_data.get("periodic_interval_hours", 6.0))
+        camera._max_size_mb = float(cam_data.get("max_photo_dir_size_mb", 100.0))
+
+    if emailer is not None:
+        email_data = data.get("email", {})
+        emailer._enabled = bool(email_data.get("enabled", False))
+        emailer._host = email_data.get("smtp_host", "")
+        emailer._port = int(email_data.get("smtp_port", 587))
+        emailer._use_tls = bool(email_data.get("use_tls", True))
+        emailer._use_ssl = bool(email_data.get("use_ssl", False))
+        emailer._username = email_data.get("username", "")
+        emailer._password = email_data.get("password", "")
+        emailer._from = email_data.get("from_address", "")
+        emailer._to = email_data.get("to_address", "")
+
+
+@bp.route("/settings")
+@login_required
+def settings():
+    return render_template("settings.html")
+
+
+@bp.route("/api/settings")
+@login_required
+def api_settings_get():
+    cfg = _read_config()
+    return jsonify(_build_settings_response(cfg))
+
+
+@bp.route("/api/settings", methods=["POST"])
+@login_required
+def api_settings_post():
+    data = request.get_json(force=True)
+    err = _validate_settings(data)
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
+    full = _read_config()
+    merged = _merge_settings(full, data)
+    _write_config(merged)
+    _apply_settings(data)
+    logger.info("Settings updated via web UI")
+    return jsonify({"ok": True})

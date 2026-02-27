@@ -33,7 +33,7 @@
     "to_address": ""
   },
   "camera": {
-    "enabled": false,
+    "enabled": true,
     "type": "simulated",
     "photo_dir": "data/photos",
     "max_photo_dir_size_mb": 100.0,

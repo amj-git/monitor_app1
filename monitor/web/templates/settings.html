@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% block title %}Settings — Equipment Monitor{% endblock %}
+{% block content %}
+<h2>Settings</h2>
+<div id="status"></div>
+
+<section class="settings-section">
+  <h3>General</h3>
+  <table class="settings-table">
+    <tr>
+      <td><label for="polling_interval">Polling Interval (s)</label></td>
+      <td><input type="number" id="polling_interval" min="5" max="3600" step="1"></td>
+    </tr>
+    <tr>
+      <td><label for="max_db_size_mb">Max DB Size (MB)</label></td>
+      <td><input type="number" id="max_db_size_mb" min="1" step="0.1"></td>
+    </tr>
+  </table>
+</section>
+
+<section class="settings-section">
+  <h3>Sensors</h3>
+  <div id="sensors-container">Loading...</div>
+</section>
+
+<section class="settings-section">
+  <h3>Camera</h3>
+  <table class="settings-table">
+    <tr>
+      <td>Enabled</td>
+      <td><input type="checkbox" id="camera_enabled"></td>
+    </tr>
+    <tr>
+      <td>Type</td>
+      <td><span id="camera_type" class="ro"></span></td>
+    </tr>
+    <tr>
+      <td>Photo Directory</td>
+      <td><span id="camera_photo_dir" class="ro"></span></td>
+    </tr>
+    <tr>
+      <td><label for="camera_periodic">Periodic Interval (h)</label></td>
+      <td><input type="number" id="camera_periodic" min="0.1" step="0.1"></td>
+    </tr>
+    <tr>
+      <td><label for="camera_max_size">Max Photo Dir Size (MB)</label></td>
+      <td><input type="number" id="camera_max_size" min="1" step="1"></td>
+    </tr>
+  </table>
+</section>
+
+<section class="settings-section">
+  <h3>Email / SMTP</h3>
+  <table class="settings-table">
+    <tr>
+      <td>Enabled</td>
+      <td><input type="checkbox" id="email_enabled"></td>
+    </tr>
+    <tr>
+      <td><label for="smtp_host">SMTP Host</label></td>
+      <td><input type="text" id="smtp_host"></td>
+    </tr>
+    <tr>
+      <td><label for="smtp_port">SMTP Port</label></td>
+      <td><input type="number" id="smtp_port" min="1" max="65535" step="1"></td>
+    </tr>
+    <tr>
+      <td>Use TLS</td>
+      <td><input type="checkbox" id="use_tls"></td>
+    </tr>
+    <tr>
+      <td>Use SSL</td>
+      <td><input type="checkbox" id="use_ssl"></td>
+    </tr>
+    <tr>
+      <td><label for="email_username">Username</label></td>
+      <td><input type="text" id="email_username" autocomplete="username"></td>
+    </tr>
+    <tr>
+      <td><label for="email_password">Password</label></td>
+      <td><input type="password" id="email_password" autocomplete="current-password"></td>
+    </tr>
+    <tr>
+      <td><label for="from_address">From Address</label></td>
+      <td><input type="email" id="from_address"></td>
+    </tr>
+    <tr>
+      <td><label for="to_address">To Address</label></td>
+      <td><input type="email" id="to_address"></td>
+    </tr>
+  </table>
+</section>
+
+<button onclick="saveSettings()">Save Settings</button>
+
+<script>
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+var currentSettings = null;
+
+function loadSettings() {
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", "/api/settings", true);
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState !== 4) return;
+    if (xhr.status !== 200) {
+      document.getElementById("status").textContent = "Error loading settings.";
+      document.getElementById("status").className = "status-error";
+      return;
+    }
+    var data;
+    try { data = JSON.parse(xhr.responseText); } catch(e) { return; }
+    currentSettings = data;
+    populateForm(data);
+  };
+  xhr.send();
+}
+
+function populateForm(data) {
+  document.getElementById("polling_interval").value = data.polling_interval;
+  document.getElementById("max_db_size_mb").value = data.max_db_size_mb;
+
+  var container = document.getElementById("sensors-container");
+  var html = "";
+  for (var i = 0; i < data.sensors.length; i++) {
+    var s = data.sensors[i];
+    var sid = escapeHtml(s.id);
+    var minVal = (s.alarm_min !== null && s.alarm_min !== undefined) ? escapeHtml(String(s.alarm_min)) : "";
+    var maxVal = (s.alarm_max !== null && s.alarm_max !== undefined) ? escapeHtml(String(s.alarm_max)) : "";
+    html += "<div class=\"sensor-card\">";
+    html += "<table class=\"settings-table\">";
+    html += "<tr><td>ID</td><td><span class=\"ro\">" + sid + "</span></td></tr>";
+    html += "<tr><td>Type</td><td><span class=\"ro\">" + escapeHtml(s.type) + "</span></td></tr>";
+    html += "<tr><td><label for=\"sname_" + sid + "\">Name</label></td>"
+          + "<td><input type=\"text\" id=\"sname_" + sid + "\""
+          + " value=\"" + escapeHtml(s.name) + "\"></td></tr>";
+    html += "<tr><td><label for=\"smin_" + sid + "\">Alarm Min</label></td>"
+          + "<td><input type=\"number\" id=\"smin_" + sid + "\""
+          + " step=\"any\" value=\"" + minVal + "\"></td></tr>";
+    html += "<tr><td><label for=\"smax_" + sid + "\">Alarm Max</label></td>"
+          + "<td><input type=\"number\" id=\"smax_" + sid + "\""
+          + " step=\"any\" value=\"" + maxVal + "\"></td></tr>";
+    html += "</table></div>";
+  }
+  container.innerHTML = html || "<p>No sensors configured.</p>";
+
+  document.getElementById("camera_enabled").checked = data.camera.enabled;
+  document.getElementById("camera_type").textContent = data.camera.type;
+  document.getElementById("camera_photo_dir").textContent = data.camera.photo_dir;
+  document.getElementById("camera_periodic").value = data.camera.periodic_interval_hours;
+  document.getElementById("camera_max_size").value = data.camera.max_photo_dir_size_mb;
+
+  document.getElementById("email_enabled").checked = data.email.enabled;
+  document.getElementById("smtp_host").value = data.email.smtp_host;
+  document.getElementById("smtp_port").value = data.email.smtp_port;
+  document.getElementById("use_tls").checked = data.email.use_tls;
+  document.getElementById("use_ssl").checked = data.email.use_ssl;
+  document.getElementById("email_username").value = data.email.username;
+  document.getElementById("email_password").value = data.email.password;
+  document.getElementById("from_address").value = data.email.from_address;
+  document.getElementById("to_address").value = data.email.to_address;
+}
+
+function collectSensors() {
+  if (!currentSettings) return [];
+  var sensors = [];
+  for (var i = 0; i < currentSettings.sensors.length; i++) {
+    var sid = currentSettings.sensors[i].id;
+    var nameEl = document.getElementById("sname_" + sid);
+    var minEl  = document.getElementById("smin_"  + sid);
+    var maxEl  = document.getElementById("smax_"  + sid);
+    var minVal = minEl && minEl.value.trim() !== "" ? parseFloat(minEl.value) : null;
+    var maxVal = maxEl && maxEl.value.trim() !== "" ? parseFloat(maxEl.value) : null;
+    sensors.push({
+      id:        sid,
+      name:      nameEl ? nameEl.value : currentSettings.sensors[i].name,
+      alarm_min: minVal,
+      alarm_max: maxVal
+    });
+  }
+  return sensors;
+}
+
+function saveSettings() {
+  var statusEl = document.getElementById("status");
+  statusEl.textContent = "";
+  statusEl.className = "";
+
+  var payload = {
+    polling_interval: parseInt(document.getElementById("polling_interval").value, 10),
+    max_db_size_mb:   parseFloat(document.getElementById("max_db_size_mb").value),
+    sensors: collectSensors(),
+    camera: {
+      enabled:                 document.getElementById("camera_enabled").checked,
+      periodic_interval_hours: parseFloat(document.getElementById("camera_periodic").value),
+      max_photo_dir_size_mb:   parseFloat(document.getElementById("camera_max_size").value)
+    },
+    email: {
+      enabled:      document.getElementById("email_enabled").checked,
+      smtp_host:    document.getElementById("smtp_host").value,
+      smtp_port:    parseInt(document.getElementById("smtp_port").value, 10),
+      use_tls:      document.getElementById("use_tls").checked,
+      use_ssl:      document.getElementById("use_ssl").checked,
+      username:     document.getElementById("email_username").value,
+      password:     document.getElementById("email_password").value,
+      from_address: document.getElementById("from_address").value,
+      to_address:   document.getElementById("to_address").value
+    }
+  };
+
+  var xhr = new XMLHttpRequest();
+  xhr.open("POST", "/api/settings", true);
+  xhr.setRequestHeader("Content-Type", "application/json");
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState !== 4) return;
+    var result;
+    try { result = JSON.parse(xhr.responseText); } catch(e) { result = {}; }
+    if (xhr.status === 200 && result.ok) {
+      statusEl.textContent = "Settings saved.";
+      statusEl.className = "status-ok";
+    } else {
+      statusEl.textContent = "Error: " + (result.error || "Save failed.");
+      statusEl.className = "status-error";
+    }
+  };
+  xhr.send(JSON.stringify(payload));
+}
+
+loadSettings();
+</script>
+{% endblock %}
