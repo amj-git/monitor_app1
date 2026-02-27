@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import email.encoders
 import logging
+import os
 import smtplib
 from datetime import datetime
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 logger = logging.getLogger(__name__)
@@ -31,6 +35,7 @@ class Emailer:
         reading,
         alarm_min=None,
         alarm_max=None,
+        photo_path=None,
     ) -> bool:
         """
         Build and send an alarm alert email.
@@ -45,6 +50,8 @@ class Emailer:
             Configured minimum threshold (for breach description).
         alarm_max : float | None
             Configured maximum threshold (for breach description).
+        photo_path : str | None
+            Optional path to a JPEG to attach to the email.
 
         Returns
         -------
@@ -82,7 +89,24 @@ class Emailer:
             f"Reason : {breach_desc}\n"
         )
 
-        msg = MIMEText(body)
+        attach_photo = photo_path and os.path.isfile(photo_path)
+
+        if attach_photo:
+            msg = MIMEMultipart("mixed")
+            msg.attach(MIMEText(body))
+            with open(photo_path, "rb") as img_f:
+                img_data = img_f.read()
+            img_part = MIMEBase("image", "jpeg")
+            img_part.set_payload(img_data)
+            email.encoders.encode_base64(img_part)
+            img_part.add_header(
+                "Content-Disposition",
+                f'attachment; filename="{os.path.basename(photo_path)}"',
+            )
+            msg.attach(img_part)
+        else:
+            msg = MIMEText(body)
+
         msg["Subject"] = subject
         msg["From"] = self._from
         msg["To"] = self._to

@@ -32,6 +32,13 @@
     "from_address": "",
     "to_address": ""
   },
+  "camera": {
+    "enabled": false,
+    "type": "simulated",
+    "photo_dir": "data/photos",
+    "max_photo_dir_size_mb": 100.0,
+    "periodic_interval_hours": 6
+  },
   "web": {
     "host": "0.0.0.0",
     "port": 5000,

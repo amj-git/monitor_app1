@@ -3,6 +3,7 @@ import logging
 import threading
 import time
 
+from monitor.camera_manager import CameraManager
 from monitor.emailer import Emailer
 from monitor.sensor_manager import SensorManager
 from monitor.web import create_app
@@ -20,6 +21,7 @@ def main():
     manager = SensorManager(config_path="config.json")
     interval = manager.polling_interval
 
+    camera = CameraManager(config.get("camera", {}))
     emailer = Emailer(config.get("email", {}))
     sensor_cfg_by_id = {s["id"]: s for s in config.get("sensors", [])}
 
@@ -59,15 +61,20 @@ def main():
             readings_by_id = {r.sensor_id: r for r in readings}
             for sid in alert_ids:
                 name = sensor_names.get(sid, sid)
-                print(f"  -> Email alert would be sent: {name}")
+                print(f"  -> Alert: {name}")
                 reading = readings_by_id.get(sid)
                 scfg = sensor_cfg_by_id.get(sid, {})
+                photo_path = camera.capture(trigger="alarm", sensor_id=sid)
                 if reading:
                     emailer.send_alert(
                         name, reading,
                         alarm_min=scfg.get("alarm_min"),
                         alarm_max=scfg.get("alarm_max"),
+                        photo_path=photo_path,
                     )
+
+            camera.maybe_capture_periodic()
+            camera.cleanup_if_needed()
 
             time.sleep(interval)
 
@@ -75,6 +82,7 @@ def main():
         print("\nStopped.")
     finally:
         manager.close()
+        camera.close()
 
 
 if __name__ == "__main__":

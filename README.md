@@ -346,11 +346,90 @@ When `enabled` is `false` (the default), the app runs normally and prints
 
 ---
 
+## Camera & Photo Capture
+
+The app can capture photos on alarm events and on a periodic schedule.
+Photo capture is disabled by default; no hardware is required for development
+(a simulated camera writes a placeholder JPEG file).
+
+### Trigger modes
+
+| Mode | When | Gated by |
+|---|---|---|
+| **alarm** | Each time `alert_ids` fires (same 1-day cooldown as email) | `alarm_manager` |
+| **periodic** | Every `periodic_interval_hours` (independent of alarms) | `CameraManager` |
+| **on-demand** | Call `camera.capture(trigger="…")` directly | *(future / scripting)* |
+
+### Configuration
+
+Add (or edit) the `"camera"` block in `config.json`:
+
+```json
+"camera": {
+  "enabled": false,
+  "type": "simulated",
+  "photo_dir": "data/photos",
+  "max_photo_dir_size_mb": 100.0,
+  "periodic_interval_hours": 6
+}
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Master on/off switch |
+| `type` | string | `"simulated"` | Camera driver: `"simulated"` or `"csi"` |
+| `photo_dir` | string | `"data/photos"` | Folder where JPEGs are saved |
+| `max_photo_dir_size_mb` | float | `100.0` | Oldest files are deleted when this is exceeded |
+| `periodic_interval_hours` | float | `6.0` | Hours between periodic captures; set to `0` to disable |
+
+### Camera types
+
+**`simulated`** — writes a 4-byte minimal JPEG placeholder. No hardware, no extra
+packages. Use this on Windows for development and testing.
+
+**`csi`** — captures a real JPEG via the Raspberry Pi CSI camera using `picamera2`.
+`picamera2` is a Raspberry Pi OS system package; use `--system-site-packages` when
+creating the virtual environment (see *Installation — Raspberry Pi* above):
+
+```
+python3 -m venv venv --system-site-packages
+```
+
+### Photo filename format
+
+```
+photo_YYYYMMDD_HHMMSS_<trigger>[_<sensor_id>].jpg
+```
+
+Examples:
+- `photo_20260227_143015_alarm_sim_temp_1.jpg` — alarm photo for sensor `sim_temp_1`
+- `photo_20260227_180000_periodic.jpg` — scheduled periodic capture
+
+Photos are saved in `photo_dir` (default `data/photos/`).
+
+### Storage limit and auto-cleanup
+
+After each poll cycle, `CameraManager.cleanup_if_needed()` checks the total size of
+`photo_dir`. When the folder exceeds `max_photo_dir_size_mb`, the oldest files (by
+modification time) are deleted until the folder is back under the limit.
+
+### Email attachment
+
+When both email and camera are enabled, the alarm-trigger photo is attached to the
+alert email as a JPEG file.
+
+---
+
 ## Project Structure
 
 ```
 monitor_app1/
 ├── monitor/
+│   ├── cameras/
+│   │   ├── __init__.py          # Package marker
+│   │   ├── base.py              # BaseCamera ABC
+│   │   ├── csi.py               # PiCSICamera (picamera2, Pi only)
+│   │   └── simulated.py         # SimulatedCamera (placeholder JPEG)
 │   ├── sensors/
 │   │   ├── base.py              # BaseSensor ABC + SensorReading dataclass
 │   │   ├── simulated.py         # SimulatedTemperatureSensor
@@ -366,12 +445,14 @@ monitor_app1/
 │   │   └── static/
 │   │       └── style.css        # Minimal stylesheet, no CDN
 │   ├── alarm_manager.py         # Alarm state tracking + email cooldown logic
+│   ├── camera_manager.py        # Photo capture orchestrator (alarm + periodic)
 │   ├── emailer.py               # SMTP email delivery (stdlib only)
 │   ├── history_db.py            # SQLite persistence (WAL mode)
 │   └── sensor_manager.py        # Loads config, polls sensors, drives alarms
 ├── data/
+│   ├── photos/                  # Captured JPEGs (git-ignored)
 │   └── sensor_history.db        # SQLite database (git-ignored)
-├── config.json                  # Sensor list, polling interval, web settings
+├── config.json                  # Sensor list, polling interval, web/camera settings
 ├── main.py                      # Entry point; starts Flask thread then poll loop
 ├── requirements.txt             # Pi production dependencies
 ├── requirements-dev.txt         # Windows dev dependencies
