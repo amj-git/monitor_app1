@@ -23,6 +23,19 @@
 - **Language:** Python 3
 - Must be resource-conscious given Pi 1 B+ constraints (low CPU and RAM footprint)
 
+### 2.1 Development Environment
+
+| Environment | Setup |
+|---|---|
+| Windows PC (dev) | `python -m venv venv` → `venv\Scripts\activate` → `pip install -r requirements-dev.txt` |
+| Raspberry Pi | `python3 -m venv venv --system-site-packages` → `source venv/bin/activate` → `apt` for compiled libs → `pip install -r requirements.txt` |
+
+**Library strategy:**
+- `requirements.txt` — Pi production dependencies
+- `requirements-dev.txt` — Windows dev dependencies (excludes Pi-only libs)
+- Pi-only libraries (RPi.GPIO, picamera2) are wrapped with `try/except ImportError` so the app imports cleanly on Windows; sensors/subsystems that need them raise a clear error if called without the library
+- The sensor framework uses stdlib only — no pip installs needed to run with simulated sensors
+
 ---
 
 ## 3. Core Application Architecture
@@ -44,9 +57,12 @@
 
 ### 4.2 Temperature Sensors
 
-- Support common sensor types (e.g. DS18B20 one-wire, DHT11, DHT22)
-  - DS18B20 confirmed target; additional types TBD
-- Individual sensors added/removed via configuration
+- **DS18B20** (1-wire) confirmed as the first real sensor type
+  - Reads from `/sys/bus/w1/devices/{device_id}/w1_slave` on Pi
+  - Requires `w1-gpio` and `w1-therm` kernel modules (via `raspi-config` or `/boot/config.txt`)
+  - Additional sensor types (DHT11, DHT22, etc.) are TBD
+- **Simulated temperature sensor** available for Windows development and testing (no hardware required)
+- Individual sensors added/removed via configuration (`config.json`)
 - Each sensor assigned a user-defined name
 
 ### 4.3 Digital Input Sensors
@@ -160,7 +176,11 @@ Configurable items available in the settings area:
   - Timestamp
   - Latest captured photograph (if available)
 - **SMTP-based** email (configurable server, port, credentials, recipient)
-- Cooldown/de-bounce period to avoid repeated emails during a sustained alarm — **TBD**
+- Cooldown/de-bounce rules:
+  - An alarm email is sent when a sensor first breaches its threshold
+  - No further email is sent while the alarm is sustained (already-notified state)
+  - If the alarm clears and then re-triggers, a new email is sent only if at least **1 day** has elapsed since the last email for that sensor
+  - No "all clear" email is sent when an alarm clears
 
 ---
 
@@ -182,12 +202,12 @@ Configurable items available in the settings area:
 | Periodic photo capture interval | 6 hours                               |
 | Maximum photo folder size    | 100 MB (oldest photos deleted when exceeded) |
 | Maximum sensor database size | 50 MB (oldest records trimmed when exceeded) |
+| Alarm email cooldown         | 1 day (fault must clear and re-occur before another email is sent) |
 
 ---
 
 ## 11. Open Items (TBD)
 
-| # | Item                                                                 |
-|---|----------------------------------------------------------------------|
+| # | Item                                                                   |
+|---|------------------------------------------------------------------------|
 | 1 | Specific temperature sensor types beyond DS18B20 (DHT11, DHT22, etc.) |
-| 2 | Alarm email cooldown / de-bounce period                              |

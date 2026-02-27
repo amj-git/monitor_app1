@@ -1,0 +1,2 @@
+# Pi production dependencies
+# Sensor framework is stdlib-only; add Flask and Pi-specific libs here as features are implemented

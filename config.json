@@ -1,0 +1,22 @@
+{
+  "polling_interval": 30,
+  "sensors": [
+    {
+      "id": "sim_temp_1",
+      "name": "Simulated Temp 1",
+      "type": "simulated_temperature",
+      "alarm_min": 10.0,
+      "alarm_max": 30.0,
+      "sim_min": 15.0,
+      "sim_max": 35.0
+    },
+    {
+      "id": "ds18b20_1",
+      "name": "Server Room Temp",
+      "type": "ds18b20",
+      "device_id": "28-000000000000",
+      "alarm_min": 5.0,
+      "alarm_max": 40.0
+    }
+  ]
+}
