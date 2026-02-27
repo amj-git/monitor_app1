@@ -36,6 +36,8 @@ def main():
 
     except KeyboardInterrupt:
         print("\nStopped.")
+    finally:
+        manager.close()
 
 
 if __name__ == "__main__":

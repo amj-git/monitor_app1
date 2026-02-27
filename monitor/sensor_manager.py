@@ -4,6 +4,7 @@ import json
 import logging
 
 from .alarm_manager import AlarmManager
+from .history_db import HistoryDB
 from .sensors.base import SensorReading
 from .sensors.simulated import SimulatedTemperatureSensor
 from .sensors.ds18b20 import DS18B20Sensor
@@ -53,6 +54,10 @@ class SensorManager:
                              sensor_cfg.get("id", "?"), e)
 
         self._alarm_manager = AlarmManager()
+        self._db = HistoryDB(
+            db_path=config.get("db_path", "data/sensor_history.db"),
+            max_size_mb=config.get("max_db_size_mb", 50.0),
+        )
 
     def poll(self) -> tuple[list[SensorReading], list[str]]:
         """
@@ -74,4 +79,10 @@ class SensorManager:
                 # Sensor in error is not alarming — clear alarm state
                 self._alarm_manager.update(sensor.sensor_id, False)
 
+        self._db.insert_readings(readings)
+        self._db.trim_if_needed()
+
         return readings, alert_sensor_ids
+
+    def close(self) -> None:
+        self._db.close()

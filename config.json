@@ -1,5 +1,7 @@
 {
   "polling_interval": 30,
+  "db_path": "data/sensor_history.db",
+  "max_db_size_mb": 50.0,
   "sensors": [
     {
       "id": "sim_temp_1",
