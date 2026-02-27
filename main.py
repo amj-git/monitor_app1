@@ -30,7 +30,7 @@ def main():
 
             for sid in alert_ids:
                 name = sensor_names.get(sid, sid)
-                print(f"  \u2192 Email alert would be sent: {name}")
+                print(f"  -> Email alert would be sent: {name}")
 
             time.sleep(interval)
 
