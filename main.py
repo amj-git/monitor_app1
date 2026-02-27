@@ -35,6 +35,7 @@ def main():
         "db": manager._db,
         "sensor_names": sensor_names,
         "photo_dir": config.get("camera", {}).get("photo_dir", "data/photos"),
+        "camera": camera,
     }
     app = create_app(flask_config)
     host = web_cfg.get("host", "0.0.0.0")

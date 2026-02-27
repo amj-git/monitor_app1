@@ -111,7 +111,7 @@ Three trigger modes (all configurable):
 
 | Mode       | Description                                                    |
 |------------|----------------------------------------------------------------|
-| On demand  | Triggered manually from the Web GUI                            |
+| On demand  | Triggered manually via "Capture Now" button on the Photos page |
 | Periodic   | Captured on a regular time interval (default: **6 hours**)     |
 | Alarm      | Triggered automatically when a sensor alarm threshold is breached |
 

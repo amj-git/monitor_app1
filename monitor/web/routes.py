@@ -231,6 +231,31 @@ def photo_download(filename):
     )
 
 
+@bp.route("/api/photos/capture", methods=["POST"])
+@login_required
+def capture_photo():
+    camera = current_app.config.get("CAMERA")
+    if camera is None or not camera.is_enabled():
+        return jsonify({"ok": False, "error": "Camera is not enabled"}), 503
+    filepath = camera.capture(trigger="manual")
+    if filepath is None:
+        return jsonify({"ok": False, "error": "Capture failed"}), 500
+    filename = os.path.basename(filepath)
+    info = _parse_photo_name(filename)
+    size_kb = round(os.path.getsize(filepath) / 1024, 1)
+    photo = {
+        "filename": filename,
+        "trigger": info["trigger"] if info else "",
+        "sensor_id": info["sensor_id"] if info else "",
+        "timestamp": info["timestamp"] if info else "",
+        "size_kb": size_kb,
+        "url": url_for("main.photo_file", filename=filename),
+        "download_url": url_for("main.photo_download", filename=filename),
+    }
+    logger.info("On-demand photo captured: %s", filepath)
+    return jsonify({"ok": True, "photo": photo})
+
+
 @bp.route("/api/photos/<filename>/delete", methods=["POST"])
 @login_required
 def delete_photo(filename):

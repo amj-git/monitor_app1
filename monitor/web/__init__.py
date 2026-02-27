@@ -22,5 +22,6 @@ def create_app(config: dict) -> Flask:
     app.config["HISTORY_DB"] = config["db"]
     app.config["SENSOR_NAMES"] = config.get("sensor_names", {})
     app.config["PHOTO_DIR"] = config.get("photo_dir", "data/photos")
+    app.config["CAMERA"] = config.get("camera")
     app.register_blueprint(bp)
     return app

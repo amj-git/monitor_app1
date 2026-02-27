@@ -3,6 +3,10 @@
 {% block content %}
 <h2>Photo Browser</h2>
 
+<p>
+  <button id="capture-btn" onclick="captureNow()">Capture Now</button>
+  <span id="capture-status" style="margin-left:0.75rem; color:#555; font-size:0.85em;"></span>
+</p>
 <p id="photo-count" data-count="0">Loading…</p>
 <table>
   <thead>
@@ -36,6 +40,24 @@ function updateCount(n) {
   el.textContent = n + " photo(s)";
 }
 
+function makeRow(p) {
+  return "<tr>"
+    + '<td><a href="' + escapeHtml(p.url) + '" target="_blank">'
+    +   '<img class="photo-thumb" src="' + escapeHtml(p.url) + '" alt="photo">'
+    + '</a></td>'
+    + "<td>" + escapeHtml(p.filename) + "</td>"
+    + "<td>" + escapeHtml(p.trigger) + "</td>"
+    + "<td>" + escapeHtml(p.sensor_id) + "</td>"
+    + "<td>" + escapeHtml(p.timestamp) + "</td>"
+    + '<td class="right">' + escapeHtml(p.size_kb) + "</td>"
+    + '<td class="photo-actions">'
+    +   '<a href="' + escapeHtml(p.url) + '" target="_blank" class="button">View</a>'
+    +   '<a href="' + escapeHtml(p.download_url) + '" class="button">Download</a>'
+    +   '<button class="delete" data-filename="' + escapeHtml(p.filename) + '">Delete</button>'
+    + "</td>"
+    + "</tr>";
+}
+
 function loadPhotos() {
   var xhr = new XMLHttpRequest();
   xhr.open("GET", "/api/photos", true);
@@ -60,24 +82,39 @@ function loadPhotos() {
     }
     var html = "";
     for (var i = 0; i < photos.length; i++) {
-      var p = photos[i];
-      html += "<tr>"
-        + '<td><a href="' + escapeHtml(p.url) + '" target="_blank">'
-        +   '<img class="photo-thumb" src="' + escapeHtml(p.url) + '" alt="photo">'
-        + '</a></td>'
-        + "<td>" + escapeHtml(p.filename) + "</td>"
-        + "<td>" + escapeHtml(p.trigger) + "</td>"
-        + "<td>" + escapeHtml(p.sensor_id) + "</td>"
-        + "<td>" + escapeHtml(p.timestamp) + "</td>"
-        + '<td class="right">' + escapeHtml(p.size_kb) + "</td>"
-        + '<td class="photo-actions">'
-        +   '<a href="' + escapeHtml(p.url) + '" target="_blank" class="button">View</a>'
-        +   '<a href="' + escapeHtml(p.download_url) + '" class="button">Download</a>'
-        +   '<button class="delete" data-filename="' + escapeHtml(p.filename) + '">Delete</button>'
-        + "</td>"
-        + "</tr>";
+      html += makeRow(photos[i]);
     }
     tbody.innerHTML = html;
+  };
+  xhr.send();
+}
+
+function captureNow() {
+  var btn = document.getElementById("capture-btn");
+  var status = document.getElementById("capture-status");
+  btn.disabled = true;
+  status.textContent = "Capturing…";
+  var xhr = new XMLHttpRequest();
+  xhr.open("POST", "/api/photos/capture", true);
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState !== 4) return;
+    btn.disabled = false;
+    var resp;
+    try { resp = JSON.parse(xhr.responseText); } catch(e) { resp = {}; }
+    if (xhr.status === 200 && resp.ok) {
+      status.textContent = "Captured: " + resp.photo.filename;
+      var tbody = document.getElementById("photo-tbody");
+      // Remove empty-state row if present
+      if (tbody.rows.length === 1 && tbody.rows[0].cells.length === 1) {
+        tbody.innerHTML = "";
+      }
+      tbody.insertAdjacentHTML("afterbegin", makeRow(resp.photo));
+      var countEl = document.getElementById("photo-count");
+      var n = parseInt(countEl.getAttribute("data-count"), 10) + 1;
+      updateCount(n);
+    } else {
+      status.textContent = "Error: " + (resp.error || xhr.status);
+    }
   };
   xhr.send();
 }
