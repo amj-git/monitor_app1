@@ -1,7 +1,7 @@
 # Equipment Monitor – Requirements Document
 
 > **Status:** Living document. Decisions marked TBD are to be resolved in future sessions.
-> **Last updated:** 2026-02-27
+> **Last updated:** 2026-02-28
 
 ---
 
@@ -67,12 +67,16 @@
 
 ### 4.3 Digital Input Sensors
 
-- Monitored via Raspberry Pi GPIO pins
+- Monitored via Raspberry Pi GPIO pins (BCM numbering)
 - Each digital input is:
   - Named by the user
-  - Assigned a specific GPIO pin
-  - Configured as active-high or active-low
-- Individual inputs added/removed via configuration
+  - Assigned a specific GPIO BCM pin number in `config.json`
+  - Configured as active-high or active-low per input (`active_state`)
+  - Configured with internal pull-up, pull-down, or no pull resistor (`pull`)
+- Events are interrupt-driven (edge-detection), not polled periodically
+- Only logged on activation — one DB row per trigger event (`value=1.0, unit="triggered"`)
+- On activation: logs to DB, prints to console, fires alarm email + photo (1-day cooldown)
+- Individual inputs added/removed via `config.json` (no web GUI required)
 
 ### 4.4 Sensor Reading & History
 
@@ -109,11 +113,11 @@
 
 Three trigger modes (all configurable):
 
-| Mode       | Description                                                    |
-|------------|----------------------------------------------------------------|
-| On demand  | Triggered manually via "Capture Now" button on the Photos page |
-| Periodic   | Captured on a regular time interval (default: **6 hours**)     |
-| Alarm      | Triggered automatically when a sensor alarm threshold is breached |
+| Mode       | Description                                                         |
+|------------|---------------------------------------------------------------------|
+| On demand  | Triggered manually via the **Photos page "Capture Now" button**     |
+| Periodic   | Captured on a regular time interval (default: **6 hours**)          |
+| Alarm      | Triggered automatically when a sensor alarm threshold is breached or a digital input activates |
 
 ### 6.3 Photo Storage
 
@@ -144,15 +148,16 @@ Three trigger modes (all configurable):
 
 ### 7.3 Settings
 
-Configurable items available in the settings area:
+Configurable items available in the settings page (`/settings`):
 
-- Add / remove / rename sensors
-- Configure sensor GPIO pins and active-high/low for digital inputs
 - Sensor polling interval
 - Alarm thresholds per sensor
 - Camera capture intervals and trigger modes
 - Database and photo storage size limits
 - Email alert settings (SMTP server, port, credentials, recipient address)
+
+> **Note:** Adding, removing, or renaming sensors and digital inputs is done via `config.json`
+> directly; the web Settings page does not manage the sensor list.
 
 ### 7.4 History Browser
 
@@ -164,6 +169,10 @@ Configurable items available in the settings area:
 - View captured photos in the GUI
 - Download individual photos
 - Delete photos
+
+### 7.6 Help
+
+- A **Help tab** (`/help`) renders `README.md` as formatted HTML in the browser
 
 ---
 
@@ -190,6 +199,7 @@ Configurable items available in the settings area:
 - Web server accessible on the local network (no internet exposure required)
 - All configuration persisted across restarts
 - Application recovers gracefully from sensor read errors without crashing
+- Web GUI is mobile-responsive (usable on screens ≤ 768 px wide)
 
 ---
 
