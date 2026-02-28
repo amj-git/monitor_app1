@@ -489,19 +489,46 @@ Add (or edit) the `"digital_inputs"` block in `config.json`:
 |---|---|---|
 | `id` | string | Unique identifier (used in DB and filenames) |
 | `name` | string | Display name shown in console and alert emails |
-| `type` | string | `"gpio"` (Raspberry Pi) or `"simulated"` (Windows / dev) |
-| `gpio_pin` | int | BCM GPIO pin number *(gpio only)* |
+| `type` | string | `"gpio"`, `"sysfs"`, or `"simulated"` — see driver notes below |
+| `gpio_pin` | int | BCM GPIO pin number *(gpio and sysfs only)* |
 | `active_state` | string | `"high"` — RISING edge activates; `"low"` — FALLING edge activates |
-| `pull` | string | `"up"`, `"down"`, or `"none"` — internal resistor *(gpio only)* |
+| `pull` | string | `"up"`, `"down"`, or `"none"` — internal resistor *(gpio driver only)* |
 | `sim_interval_seconds` | float | Mean seconds between simulated events *(simulated only)* |
+
+### Driver types
+
+**`gpio`** — Uses `RPi.GPIO` interrupt-driven edge detection. Supports configuring
+the internal pull-up/pull-down resistor via the `pull` field. If `RPi.GPIO` fails to
+load (e.g. on Pi 1 B+ with an incompatible library version), the app automatically
+falls back to the `sysfs` driver and logs a warning.
+
+**`sysfs`** — Uses the Linux kernel's `/sys/class/gpio/` interface with `select()` for
+interrupt-driven edge detection. No external library required; works on all Raspberry Pi
+hardware including Pi 1 B+. The `pull` field is ignored — configure pull resistors via
+`/boot/config.txt` instead (see *Pull resistors with sysfs* below).
+
+**`simulated`** — Fires random trigger events on a configurable mean interval. Use on
+Windows or any machine without GPIO hardware.
 
 ### Raspberry Pi wiring
 
-1. Enable `RPi.GPIO` (already a system package on Raspberry Pi OS; available via
-   `pip install RPi.GPIO` on other Linux setups).
-2. Wire the sensor signal to the chosen BCM GPIO pin.
-3. Set `"type": "gpio"` and `"gpio_pin"` to the BCM pin number.
-4. Set `"active_state"` and `"pull"` to match your sensor's wiring.
+1. Wire the sensor signal to the chosen BCM GPIO pin.
+2. Set `"type": "gpio"` (or `"sysfs"` explicitly for Pi 1 B+) and `"gpio_pin"`.
+3. Set `"active_state"` to match the sensor's logic level when activated.
+4. For `gpio` type, set `"pull"` to `"up"`, `"down"`, or `"none"`.
+
+### Pull resistors with sysfs
+
+The sysfs interface cannot configure internal pull resistors. Set them in
+`/boot/config.txt` using the `gpio` DT parameter (one line per pin):
+
+```
+gpio=17=ip,pd    # BCM pin 17, input, pull-down
+gpio=17=ip,pu    # BCM pin 17, input, pull-up
+```
+
+Reboot after editing `/boot/config.txt`. Alternatively, use an external pull resistor
+on the PCB.
 
 ### Windows / development
 
@@ -525,6 +552,7 @@ monitor_app1/
 │   │   ├── __init__.py          # Package marker
 │   │   ├── base.py              # BaseDigitalInput ABC
 │   │   ├── gpio_input.py        # GPIODigitalInput (RPi.GPIO, Pi only)
+│   │   ├── sysfs_input.py       # SysfsDigitalInput (kernel sysfs, all Pi hardware)
 │   │   └── simulated.py         # SimulatedDigitalInput (random timer, dev/Windows)
 │   ├── sensors/
 │   │   ├── base.py              # BaseSensor ABC + SensorReading dataclass

@@ -5,8 +5,9 @@ import threading
 from datetime import datetime, timedelta
 
 from .digital_inputs.base import BaseDigitalInput
-from .digital_inputs.gpio_input import GPIODigitalInput
+from .digital_inputs.gpio_input import GPIODigitalInput, _GPIO_AVAILABLE
 from .digital_inputs.simulated import SimulatedDigitalInput
+from .digital_inputs.sysfs_input import SysfsDigitalInput
 from .sensors.base import SensorReading
 
 logger = logging.getLogger(__name__)
@@ -14,15 +15,27 @@ COOLDOWN = timedelta(days=1)
 
 _INPUT_TYPES = {
     "gpio":      GPIODigitalInput,
+    "sysfs":     SysfsDigitalInput,
     "simulated": SimulatedDigitalInput,
 }
 
 
 def _build_input(cfg: dict) -> BaseDigitalInput:
     t = cfg.get("type", "gpio")
+
+    # Auto-fallback: if RPi.GPIO failed to load (e.g. Pi 1 B+ incompatibility),
+    # silently fall back to the sysfs driver which works on all Pi hardware.
+    if t == "gpio" and not _GPIO_AVAILABLE:
+        logger.warning(
+            "RPi.GPIO unavailable for input '%s' — falling back to sysfs GPIO driver",
+            cfg.get("id", "?"),
+        )
+        t = "sysfs"
+
     cls = _INPUT_TYPES.get(t)
     if cls is None:
         raise ValueError(f"Unknown digital input type: '{t}'")
+
     kwargs = {
         "input_id": cfg["id"],
         "name": cfg["name"],
@@ -31,6 +44,14 @@ def _build_input(cfg: dict) -> BaseDigitalInput:
     if cls is GPIODigitalInput:
         kwargs["gpio_pin"] = cfg["gpio_pin"]
         kwargs["pull"] = cfg.get("pull", "down")
+    elif cls is SysfsDigitalInput:
+        kwargs["gpio_pin"] = cfg["gpio_pin"]
+        if "pull" in cfg:
+            logger.warning(
+                "Input '%s': 'pull' is ignored for sysfs GPIO — "
+                "configure pull resistors via /boot/config.txt (gpio=<pin>=ip,pu/pd)",
+                cfg.get("id", "?"),
+            )
     elif cls is SimulatedDigitalInput:
         kwargs["sim_interval_seconds"] = cfg.get("sim_interval_seconds", 90)
     return cls(**kwargs)
