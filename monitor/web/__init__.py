@@ -26,5 +26,6 @@ def create_app(config: dict) -> Flask:
     app.config["SENSOR_MANAGER"] = config.get("sensor_manager")
     app.config["EMAILER"]        = config.get("emailer")
     app.config["CONFIG_PATH"]    = config.get("config_path", "config.json")
+    app.config["APP_NAME"]       = config.get("app_name", "Equipment Monitor")
     app.register_blueprint(bp)
     return app

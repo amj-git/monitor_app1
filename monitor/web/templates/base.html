@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}Equipment Monitor{% endblock %}</title>
+  <title>{% block title %}{{ config.APP_NAME }}{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <nav class="navbar">
-    <span class="nav-brand">Equipment Monitor</span>
+    <span class="nav-brand">{{ config.APP_NAME }}</span>
     {% if session.get('logged_in') %}
     <a href="{{ url_for('main.live') }}" class="nav-link">Live</a>
     <a href="{{ url_for('main.history') }}" class="nav-link">History</a>
