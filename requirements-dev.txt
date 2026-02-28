@@ -1,2 +1,3 @@
 # Windows development dependencies (excludes Pi-only libs)
 # Sensor framework is stdlib-only; add dev/test tools here as needed
+markdown>=3.4
