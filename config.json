@@ -22,22 +22,22 @@
     }
   ],
   "email": {
-    "enabled": false,
+    "enabled": true,
     "smtp_host": "smtp.gmail.com",
     "smtp_port": 587,
     "use_tls": true,
     "use_ssl": false,
-    "username": "",
-    "password": "",
-    "from_address": "",
-    "to_address": ""
+    "username": "theloftspeaking@gmail.com",
+    "password": "qsythllwrrvrdciw",
+    "from_address": "theloftspeaking@gmail.com",
+    "to_address": "amj4321@gmail.com"
   },
   "camera": {
     "enabled": true,
-    "type": "simulated",
+    "type": "csi",
     "photo_dir": "data/photos",
     "max_photo_dir_size_mb": 100.0,
-    "periodic_interval_hours": 6
+    "periodic_interval_hours": 6.0
   },
   "web": {
     "host": "0.0.0.0",
