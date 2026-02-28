@@ -16,6 +16,7 @@ class Emailer:
     """Send alarm alert emails via SMTP (stdlib only — no extra dependencies)."""
 
     def __init__(self, config: dict):
+        self._app_name = config.get("app_name", "Equipment Monitor")
         self._enabled = config.get("enabled", False)
         self._host = config.get("smtp_host", "")
         self._port = config.get("smtp_port", 587)
@@ -34,8 +35,8 @@ class Emailer:
         if not self._host or not self._to or not self._from:
             return False, "smtp_host, from_address, and to_address must all be set"
 
-        msg = MIMEText("This is a test email from Equipment Monitor.")
-        msg["Subject"] = "[Equipment Monitor] Test Email"
+        msg = MIMEText(f"This is a test email from {self._app_name}.")
+        msg["Subject"] = f"[{self._app_name}] Test Email"
         msg["From"] = self._from
         msg["To"] = self._to
 
@@ -105,7 +106,7 @@ class Emailer:
             breach_desc = "outside configured thresholds"
 
         ts = reading.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-        subject = f"[ALARM] {sensor_name}: {value}{unit}"
+        subject = f"[{self._app_name} ALARM] {sensor_name}: {value}{unit}"
         body = (
             f"Alarm triggered\n"
             f"\n"

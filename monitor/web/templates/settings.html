@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Settings — Equipment Monitor{% endblock %}
+{% block title %}Settings — {{ config.APP_NAME }}{% endblock %}
 {% block content %}
 <h2>Settings</h2>
 <div id="status"></div>
@@ -7,6 +7,10 @@
 <section class="settings-section">
   <h3>General</h3>
   <table class="settings-table">
+    <tr>
+      <td><label for="app_name">Application Name</label></td>
+      <td><input type="text" id="app_name"></td>
+    </tr>
     <tr>
       <td><label for="polling_interval">Polling Interval (s)</label></td>
       <td><input type="number" id="polling_interval" min="5" max="3600" step="1"></td>
@@ -88,9 +92,14 @@
       <td><label for="to_address">To Address</label></td>
       <td><input type="email" id="to_address"></td>
     </tr>
+    <tr>
+      <td></td>
+      <td>
+        <button onclick="sendTestEmail()">Send Test Email</button>
+        <span id="test-email-status"></span>
+      </td>
+    </tr>
   </table>
-  <button onclick="sendTestEmail()">Send Test Email</button>
-  <span id="test-email-status"></span>
 </section>
 
 <button onclick="saveSettings()">Save Settings</button>
@@ -125,6 +134,7 @@ function loadSettings() {
 }
 
 function populateForm(data) {
+  document.getElementById("app_name").value = data.app_name;
   document.getElementById("polling_interval").value = data.polling_interval;
   document.getElementById("max_db_size_mb").value = data.max_db_size_mb;
 
@@ -195,6 +205,7 @@ function saveSettings() {
   statusEl.className = "";
 
   var payload = {
+    app_name: document.getElementById("app_name").value,
     polling_interval: parseInt(document.getElementById("polling_interval").value, 10),
     max_db_size_mb:   parseFloat(document.getElementById("max_db_size_mb").value),
     sensors: collectSensors(),

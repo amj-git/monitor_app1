@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}History — Equipment Monitor{% endblock %}
+{% block title %}History — {{ config.APP_NAME }}{% endblock %}
 {% block content %}
 <h2>Sensor History</h2>
 <form id="filter-form" onsubmit="return false;">
@@ -34,6 +34,11 @@
     <tr><td colspan="6">Use the form above to load history.</td></tr>
   </tbody>
 </table>
+<div id="hist-pager">
+  <button id="hist-prev" onclick="renderHistPage(curPage-1)" disabled>Prev</button>
+  <span id="hist-page-info"></span>
+  <button id="hist-next" onclick="renderHistPage(curPage+1)" disabled>Next</button>
+</div>
 
 <script>
 function escapeHtml(s) {
@@ -42,6 +47,42 @@ function escapeHtml(s) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+var allRows  = [];
+var curPage  = 1;
+var PAGE_SIZE = 50;
+
+function renderHistPage(page) {
+  curPage = page;
+  var start = (page - 1) * PAGE_SIZE;
+  var pageRows = allRows.slice(start, start + PAGE_SIZE);
+  var html = "";
+  for (var i = 0; i < pageRows.length; i++) {
+    var r = pageRows[i];
+    var cls = r.alarming ? " class=\"alarm\"" : "";
+    var status = r.alarming ? "ALARM" : "OK";
+    html += "<tr" + cls + ">"
+      + "<td>" + escapeHtml(r.timestamp) + "</td>"
+      + "<td>" + escapeHtml(r.name) + "</td>"
+      + "<td>" + escapeHtml(r.sensor_id) + "</td>"
+      + "<td class=\"right\">" + escapeHtml(r.value) + "</td>"
+      + "<td>" + escapeHtml(r.unit) + "</td>"
+      + "<td>" + status + "</td>"
+      + "</tr>";
+  }
+  document.getElementById("hist-tbody").innerHTML =
+    html || "<tr><td colspan=\"6\">No results.</td></tr>";
+  updateHistPager();
+}
+
+function updateHistPager() {
+  var total = allRows.length;
+  var totalPages = Math.ceil(total / PAGE_SIZE) || 1;
+  document.getElementById("hist-page-info").textContent =
+    "Page " + curPage + " of " + totalPages + " (" + total + " rows)";
+  document.getElementById("hist-prev").disabled = (curPage <= 1);
+  document.getElementById("hist-next").disabled = (curPage >= totalPages);
 }
 
 function buildQuery() {
@@ -69,23 +110,9 @@ function doFilter() {
     }
     var rows;
     try { rows = JSON.parse(xhr.responseText); } catch(e) { return; }
+    allRows = rows;
     document.getElementById("row-count").textContent = rows.length + " row(s)";
-    var tbody = document.getElementById("hist-tbody");
-    var html = "";
-    for (var i = 0; i < rows.length; i++) {
-      var r = rows[i];
-      var cls = r.alarming ? " class=\"alarm\"" : "";
-      var status = r.alarming ? "ALARM" : "OK";
-      html += "<tr" + cls + ">"
-        + "<td>" + escapeHtml(r.timestamp) + "</td>"
-        + "<td>" + escapeHtml(r.name) + "</td>"
-        + "<td>" + escapeHtml(r.sensor_id) + "</td>"
-        + "<td class=\"right\">" + escapeHtml(r.value) + "</td>"
-        + "<td>" + escapeHtml(r.unit) + "</td>"
-        + "<td>" + status + "</td>"
-        + "</tr>";
-    }
-    tbody.innerHTML = html || "<tr><td colspan=\"6\">No results.</td></tr>";
+    renderHistPage(1);
   };
   xhr.send();
 }

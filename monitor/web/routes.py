@@ -313,6 +313,7 @@ def _build_settings_response(cfg):
     cam = cfg.get("camera", {})
     email_cfg = cfg.get("email", {})
     return {
+        "app_name": cfg.get("app_name", "Equipment Monitor"),
         "polling_interval": cfg.get("polling_interval", 30),
         "max_db_size_mb": float(cfg.get("max_db_size_mb", 50.0)),
         "sensors": sensors,
@@ -338,6 +339,10 @@ def _build_settings_response(cfg):
 
 
 def _validate_settings(data):
+    app_name = data.get("app_name", "")
+    if not isinstance(app_name, str) or not app_name.strip():
+        return "app_name must be a non-empty string"
+
     try:
         pi = int(data.get("polling_interval"))
         if not (5 <= pi <= 3600):
@@ -393,6 +398,7 @@ def _validate_settings(data):
 
 def _merge_settings(full, data):
     merged = copy.deepcopy(full)
+    merged["app_name"] = data["app_name"].strip()
     merged["polling_interval"] = int(data["polling_interval"])
     merged["max_db_size_mb"] = float(data["max_db_size_mb"])
 
@@ -429,6 +435,8 @@ def _merge_settings(full, data):
 
 
 def _apply_settings(data):
+    current_app.config["APP_NAME"] = data["app_name"].strip()
+
     manager = current_app.config.get("SENSOR_MANAGER")
     emailer = current_app.config.get("EMAILER")
     camera = current_app.config.get("CAMERA")
@@ -454,6 +462,7 @@ def _apply_settings(data):
         camera._max_size_mb = float(cam_data.get("max_photo_dir_size_mb", 100.0))
 
     if emailer is not None:
+        emailer._app_name = data["app_name"].strip()
         email_data = data.get("email", {})
         emailer._enabled = bool(email_data.get("enabled", False))
         emailer._host = email_data.get("smtp_host", "")
@@ -500,6 +509,7 @@ def api_settings_test_email():
     data = request.get_json(force=True)
     email_data = data.get("email", {})
     test_emailer = Emailer({
+        "app_name":     current_app.config.get("APP_NAME", "Equipment Monitor"),
         "enabled": True,
         "smtp_host":    email_data.get("smtp_host", ""),
         "smtp_port":    email_data.get("smtp_port", 587),

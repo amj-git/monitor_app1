@@ -28,6 +28,7 @@ def main():
 
     web_cfg = config.get("web", {})
     flask_config = {
+        "app_name": config.get("app_name", "Equipment Monitor"),
         "secret_key": web_cfg.get("secret_key", "change-me"),
         "username": web_cfg.get("username", "admin"),
         "password_hash": web_cfg.get("password_hash", ""),
