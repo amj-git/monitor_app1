@@ -242,3 +242,37 @@ button.delete:hover {
 .markdown-body a {
   color: #1a1a2e;
 }
+
+@media (max-width: 768px) {
+  /* Content: reduce side padding to give tables more room */
+  .content {
+    padding: 0.75rem;
+  }
+
+  /* Navbar: let links wrap onto a second row */
+  .navbar {
+    flex-wrap: wrap;
+    gap: 0.4rem 0.6rem;
+  }
+
+  /* Force brand onto its own full-width row so links start on row 2 */
+  .nav-brand {
+    flex: 0 0 100%;
+    margin-right: 0;
+    margin-bottom: 0.2rem;
+  }
+
+  /* Smaller link padding so 6 links fit comfortably across two rows */
+  .nav-link {
+    padding: 0.2rem 0.35rem;
+    font-size: 0.9em;
+  }
+
+  /* Data tables: make the element itself scroll horizontally,
+     so the page body never overflows */
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
