@@ -1,5 +1,5 @@
 {
-  "app_name": "Equipment Monitor",
+  "app_name": "Chiller Monitor",
   "polling_interval": 30,
   "db_path": "data/sensor_history.db",
   "max_db_size_mb": 50.0,
