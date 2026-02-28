@@ -1,2 +1,3 @@
 # Pi production dependencies
 Flask>=2.2,<3
+markdown>=3.4

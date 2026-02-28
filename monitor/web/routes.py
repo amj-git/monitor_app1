@@ -11,6 +11,9 @@ import re
 import tempfile
 from datetime import datetime
 
+import markdown as md_lib
+from markupsafe import Markup
+
 from monitor.emailer import Emailer
 
 from flask import (
@@ -473,6 +476,21 @@ def _apply_settings(data):
         emailer._password = email_data.get("password", "")
         emailer._from = email_data.get("from_address", "")
         emailer._to = email_data.get("to_address", "")
+
+
+@bp.route("/help")
+@login_required
+def help():
+    readme_path = os.path.normpath(
+        os.path.join(current_app.root_path, "..", "..", "README.md")
+    )
+    try:
+        with open(readme_path, encoding="utf-8") as f:
+            raw = f.read()
+        content = Markup(md_lib.markdown(raw, extensions=["fenced_code", "tables"]))
+    except OSError:
+        content = Markup("<p>README.md not found.</p>")
+    return render_template("help.html", content=content)
 
 
 @bp.route("/settings")
