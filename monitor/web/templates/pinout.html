@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Pinout — {{ config.APP_NAME }}{% endblock %}
+{% block content %}
+<h2>GPIO Pinout</h2>
+<p class="pinout-model">Pi model: <strong>{{ pi_model }}</strong></p>
+
+<div class="pinout-legend">
+  <span class="legend-swatch pin-3v3">3.3 V</span>
+  <span class="legend-swatch pin-5v">5 V</span>
+  <span class="legend-swatch pin-gnd">GND</span>
+  <span class="legend-swatch pin-gpio">GPIO</span>
+  <span class="legend-swatch pin-onewire">1-Wire / DS18B20</span>
+  <span class="legend-swatch pin-digital-input">Digital Input</span>
+  <span class="legend-swatch pin-special">Special</span>
+</div>
+
+<div class="pinout-scroll">
+  <table class="pinout-table">
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        {# Left cell: [label area][pin number] — number sits at centre of connector #}
+        <td class="pin-cell pin-cell-left {{ row.left.css_class }}">
+          <div class="pin-inner pin-inner-left">
+            <div class="pin-label">{{ row.left.label }}</div>
+            {% if row.left.annotation %}
+            <div class="pin-annotation">{{ row.left.annotation.label }}</div>
+            {% endif %}
+          </div>
+          <div class="pin-num">{{ row.left.phys }}</div>
+        </td>
+        {# Right cell: [pin number][label area] #}
+        <td class="pin-cell pin-cell-right {{ row.right.css_class }}">
+          <div class="pin-num">{{ row.right.phys }}</div>
+          <div class="pin-inner pin-inner-right">
+            <div class="pin-label">{{ row.right.label }}</div>
+            {% if row.right.annotation %}
+            <div class="pin-annotation">{{ row.right.annotation.label }}</div>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

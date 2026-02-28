@@ -35,6 +35,29 @@ logger = logging.getLogger(__name__)
 
 bp = Blueprint("main", __name__)
 
+_GPIO_PINS = [
+    (1,  "3V3",    None, "3v3",     2,  "5V",     None, "5v"),
+    (3,  "GPIO2",  2,    "gpio",    4,  "5V",     None, "5v"),
+    (5,  "GPIO3",  3,    "gpio",    6,  "GND",    None, "gnd"),
+    (7,  "GPIO4",  4,    "gpio",    8,  "GPIO14", 14,   "gpio"),
+    (9,  "GND",    None, "gnd",     10, "GPIO15", 15,   "gpio"),
+    (11, "GPIO17", 17,   "gpio",    12, "GPIO18", 18,   "gpio"),
+    (13, "GPIO27", 27,   "gpio",    14, "GND",    None, "gnd"),
+    (15, "GPIO22", 22,   "gpio",    16, "GPIO23", 23,   "gpio"),
+    (17, "3V3",    None, "3v3",     18, "GPIO24", 24,   "gpio"),
+    (19, "GPIO10", 10,   "gpio",    20, "GND",    None, "gnd"),
+    (21, "GPIO9",  9,    "gpio",    22, "GPIO25", 25,   "gpio"),
+    (23, "GPIO11", 11,   "gpio",    24, "GPIO8",  8,    "gpio"),
+    (25, "GND",    None, "gnd",     26, "GPIO7",  7,    "gpio"),
+    (27, "ID_SD",  None, "special", 28, "ID_SC",  None, "special"),
+    (29, "GPIO5",  5,    "gpio",    30, "GND",    None, "gnd"),
+    (31, "GPIO6",  6,    "gpio",    32, "GPIO12", 12,   "gpio"),
+    (33, "GPIO13", 13,   "gpio",    34, "GND",    None, "gnd"),
+    (35, "GPIO19", 19,   "gpio",    36, "GPIO16", 16,   "gpio"),
+    (37, "GPIO26", 26,   "gpio",    38, "GPIO20", 20,   "gpio"),
+    (39, "GND",    None, "gnd",     40, "GPIO21", 21,   "gpio"),
+]
+
 
 def login_required(f):
     @functools.wraps(f)
@@ -542,3 +565,96 @@ def api_settings_test_email():
     if ok:
         return jsonify({"ok": True})
     return jsonify({"ok": False, "error": err}), 500
+
+
+# ---------------------------------------------------------------------------
+# Pinout
+# ---------------------------------------------------------------------------
+
+def _get_pi_model():
+    """Read Pi model string from /proc/device-tree/model; return 'Unknown' on failure."""
+    try:
+        with open("/proc/device-tree/model", "r") as f:
+            return f.read().rstrip("\x00").strip()
+    except OSError:
+        return "Unknown"
+
+
+def _get_1wire_bcm_pin():
+    """
+    Return the BCM pin configured for 1-wire (default 4).
+    Searches /boot/firmware/config.txt then /boot/config.txt for:
+        dtoverlay=w1-gpio[,gpiopin=N]
+    """
+    for path in ("/boot/firmware/config.txt", "/boot/config.txt"):
+        try:
+            with open(path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("#"):
+                        continue
+                    m = re.search(r'dtoverlay=w1-gpio.*gpiopin=(\d+)', line)
+                    if m:
+                        return int(m.group(1))
+                    if re.match(r'dtoverlay=w1-gpio\b', line):
+                        return 4  # present but no explicit gpiopin → kernel default
+        except OSError:
+            continue
+    return 4
+
+
+def _build_annotations(cfg):
+    """
+    Return dict mapping BCM pin (int) → annotation dict:
+        {"label": str, "kind": "onewire" | "digital_input"}
+    """
+    annotations = {}
+    # 1-Wire: annotate if any ds18b20 sensor is configured
+    if any(s.get("type") == "ds18b20" for s in cfg.get("sensors", [])):
+        annotations[_get_1wire_bcm_pin()] = {
+            "label": "1-Wire / DS18B20",
+            "kind": "onewire",
+        }
+    # Digital inputs: hardware-mapped only (gpio or sysfs type with gpio_pin)
+    for di in cfg.get("digital_inputs", []):
+        if di.get("type") not in ("gpio", "sysfs"):
+            continue
+        pin = di.get("gpio_pin")
+        if pin is None:
+            continue
+        annotations[int(pin)] = {
+            "label": f"{di.get('name', di['id'])}\n({di['id']})",
+            "kind": "digital_input",
+        }
+    return annotations
+
+
+def _make_pin_cell(phys, label, bcm, kind, annotations):
+    """Build a template-ready dict for one pin cell."""
+    annotation = annotations.get(bcm) if bcm is not None else None
+    if annotation:
+        css_class = "pin-onewire" if annotation["kind"] == "onewire" else "pin-digital-input"
+    else:
+        css_class = f"pin-{kind}"   # pin-gpio, pin-3v3, pin-5v, pin-gnd, pin-special
+    return {
+        "phys": phys,
+        "label": label,
+        "bcm": bcm,
+        "css_class": css_class,
+        "annotation": annotation,
+    }
+
+
+@bp.route("/pinout")
+@login_required
+def pinout():
+    cfg = _read_config()
+    pi_model = _get_pi_model()
+    annotations = _build_annotations(cfg)
+    rows = []
+    for (pl, ll, bl, kl, pr, lr, br, kr) in _GPIO_PINS:
+        rows.append({
+            "left":  _make_pin_cell(pl, ll, bl, kl, annotations),
+            "right": _make_pin_cell(pr, lr, br, kr, annotations),
+        })
+    return render_template("pinout.html", pi_model=pi_model, rows=rows)

@@ -276,3 +276,65 @@ button.delete:hover {
     -webkit-overflow-scrolling: touch;
   }
 }
+
+/* ── Pinout page ─────────────────────────────────────────────────── */
+.pinout-model { margin: 0 0 0.75rem; color: #555; }
+
+.pinout-legend {
+  display: flex; flex-wrap: wrap; gap: 0.4rem 0.75rem; margin-bottom: 1rem;
+}
+.legend-swatch {
+  display: inline-block; padding: 0.2rem 0.7rem;
+  border-radius: 3px; font-size: 0.82em; font-weight: bold; color: #fff;
+}
+
+.pinout-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Override global mobile rule (table { display: block }) */
+.pinout-table          { border-collapse: collapse; width: auto; }
+.pinout-table,
+.pinout-table tbody,
+.pinout-table tr,
+.pinout-table td       { display: revert; }
+
+.pin-cell {
+  display: flex; align-items: stretch;
+  border: none; padding: 0; vertical-align: middle;
+  border-top: 1px solid rgba(0,0,0,0.1);
+}
+.pin-cell-left  { flex-direction: row;         min-width: 170px; }
+.pin-cell-right { flex-direction: row;         min-width: 170px; }
+
+.pin-num {
+  display: flex; align-items: center; justify-content: center;
+  min-width: 2.2em; padding: 0.35rem 0.4rem;
+  background: #444; color: #fff;
+  font-size: 0.78em; font-weight: bold; font-family: monospace;
+  flex-shrink: 0;
+}
+
+.pin-inner {
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 0.35rem 0.6rem; flex: 1; gap: 0.1rem;
+}
+.pin-inner-left  { text-align: right; }
+.pin-inner-right { text-align: left; }
+
+.pin-label      { font-size: 0.82em; font-weight: bold; font-family: monospace; }
+.pin-annotation { font-size: 0.75em; font-style: italic; line-height: 1.3; white-space: pre-line; }
+
+/* Colour classes — applied to the whole <td> */
+.pin-3v3            { background: #d97706; color: #fff; }
+.pin-5v             { background: #c0392b; color: #fff; }
+.pin-gnd            { background: #2c2c2c; color: #ccc; }
+.pin-gpio           { background: #27ae60; color: #fff; }
+.pin-special        { background: #7f8c8d; color: #fff; }
+.pin-onewire        { background: #b8860b; color: #fff; }
+.pin-digital-input  { background: #2471a3; color: #fff; }
+
+/* pin-num badge inherits its own dark background regardless of cell colour */
+.pin-cell .pin-num  { background: rgba(0,0,0,0.35); color: #fff; }
+
+@media (max-width: 768px) {
+  .pin-cell-left, .pin-cell-right { min-width: 130px; }
+}
