@@ -1,7 +1,10 @@
 try:
     import RPi.GPIO as GPIO
     _GPIO_AVAILABLE = True
-except ImportError:
+except Exception:
+    # Catches ImportError (GPIO not installed) and errors raised during import
+    # on unsupported hardware (e.g. NotImplementedError on Pi 1 B+ with some
+    # RPi.GPIO versions that don't recognise old-style revision codes).
     _GPIO_AVAILABLE = False
 
 from .base import BaseDigitalInput
@@ -15,7 +18,10 @@ class GPIODigitalInput(BaseDigitalInput):
 
     def start(self, callback):
         if not _GPIO_AVAILABLE:
-            raise RuntimeError("RPi.GPIO not available — use type 'simulated' on Windows")
+            raise RuntimeError(
+                "RPi.GPIO unavailable (not installed, or failed to load on this hardware) "
+                "— use type 'simulated' for development"
+            )
         pull_map = {"up": GPIO.PUD_UP, "down": GPIO.PUD_DOWN, "none": GPIO.PUD_OFF}
         pud = pull_map.get(self._pull, GPIO.PUD_DOWN)
         GPIO.setmode(GPIO.BCM)
