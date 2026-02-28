@@ -235,6 +235,32 @@ Browse and filter the full reading history stored in SQLite.
 
 The CSV contains columns: `timestamp`, `sensor_id`, `name`, `value`, `unit`, `alarming`.
 
+Digital input trigger events appear in the history table with `value=1.0` and `unit=triggered`.
+
+### Settings (`/settings`)
+
+Configure the app without editing `config.json` by hand:
+
+- Sensor polling interval and alarm thresholds
+- Camera enable/disable, type, directory, storage limit, and periodic interval
+- Email SMTP server, port, credentials, recipient address, and enable/disable toggle
+- A **Send test email** button lets you verify the email configuration immediately
+- Database trim controls (trim oldest rows to a target size)
+
+> Adding or removing sensors and digital inputs requires editing `config.json` directly.
+
+### Photo browser (`/photos`)
+
+- View all captured photos in reverse chronological order (paginated)
+- Click a thumbnail to download the full JPEG
+- Delete individual photos
+- **Capture Now** button takes an on-demand photo immediately
+
+### Help (`/help`)
+
+Renders this `README.md` file as formatted HTML so documentation is always
+accessible without leaving the web GUI.
+
 ### Logging out
 
 Click **Logout** in the navigation bar. You are returned to the login page and the session
@@ -356,9 +382,9 @@ Photo capture is disabled by default; no hardware is required for development
 
 | Mode | When | Gated by |
 |---|---|---|
-| **alarm** | Each time `alert_ids` fires (same 1-day cooldown as email) | `alarm_manager` |
+| **alarm** | Each time an alarm fires (same 1-day cooldown as email) | `alarm_manager` / `DigitalInputManager` |
 | **periodic** | Every `periodic_interval_hours` (independent of alarms) | `CameraManager` |
-| **on-demand** | Call `camera.capture(trigger="…")` directly | *(future / scripting)* |
+| **on-demand** | Immediately, when requested | Photos page **Capture Now** button |
 
 ### Configuration
 
@@ -420,6 +446,71 @@ alert email as a JPEG file.
 
 ---
 
+## Digital Inputs
+
+The app supports GPIO-based digital inputs (door contacts, PIR motion detectors, etc.)
+as an event-driven subsystem alongside the periodic temperature-sensor polling loop.
+
+### How it works
+
+- On the Raspberry Pi, `GPIODigitalInput` uses `RPi.GPIO` interrupt-driven edge detection.
+- On Windows (development), `SimulatedDigitalInput` fires random trigger events on a
+  configurable mean interval, so you can test the full alert pipeline without hardware.
+- On each trigger:
+  1. One row is written to the SQLite history DB (`value=1.0, unit="triggered", alarming=1`).
+  2. `[HH:MM:SS] <name>: TRIGGERED  [ALARM]` is printed to the console.
+  3. If 24 hours have passed since the last alert for that input, an alarm email is sent
+     (with optional photo attachment) and `-> Alert: <name>` is printed.
+
+### Configuration
+
+Add (or edit) the `"digital_inputs"` block in `config.json`:
+
+```json
+"digital_inputs": [
+  {
+    "id": "door_1",
+    "name": "Front Door",
+    "type": "gpio",
+    "gpio_pin": 17,
+    "active_state": "high",
+    "pull": "down"
+  },
+  {
+    "id": "motion_1",
+    "name": "Motion Sensor (simulated)",
+    "type": "simulated",
+    "sim_interval_seconds": 90
+  }
+]
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | string | Unique identifier (used in DB and filenames) |
+| `name` | string | Display name shown in console and alert emails |
+| `type` | string | `"gpio"` (Raspberry Pi) or `"simulated"` (Windows / dev) |
+| `gpio_pin` | int | BCM GPIO pin number *(gpio only)* |
+| `active_state` | string | `"high"` — RISING edge activates; `"low"` — FALLING edge activates |
+| `pull` | string | `"up"`, `"down"`, or `"none"` — internal resistor *(gpio only)* |
+| `sim_interval_seconds` | float | Mean seconds between simulated events *(simulated only)* |
+
+### Raspberry Pi wiring
+
+1. Enable `RPi.GPIO` (already a system package on Raspberry Pi OS; available via
+   `pip install RPi.GPIO` on other Linux setups).
+2. Wire the sensor signal to the chosen BCM GPIO pin.
+3. Set `"type": "gpio"` and `"gpio_pin"` to the BCM pin number.
+4. Set `"active_state"` and `"pull"` to match your sensor's wiring.
+
+### Windows / development
+
+Set `"type": "simulated"` for each entry. The simulated driver fires trigger events
+at a random interval around `sim_interval_seconds` (±50%), exercising the full DB,
+console-print, and email pipeline without any GPIO hardware.
+
+---
+
 ## Project Structure
 
 ```
@@ -430,6 +521,11 @@ monitor_app1/
 │   │   ├── base.py              # BaseCamera ABC
 │   │   ├── csi.py               # PiCSICamera (picamera2, Pi only)
 │   │   └── simulated.py         # SimulatedCamera (placeholder JPEG)
+│   ├── digital_inputs/
+│   │   ├── __init__.py          # Package marker
+│   │   ├── base.py              # BaseDigitalInput ABC
+│   │   ├── gpio_input.py        # GPIODigitalInput (RPi.GPIO, Pi only)
+│   │   └── simulated.py         # SimulatedDigitalInput (random timer, dev/Windows)
 │   ├── sensors/
 │   │   ├── base.py              # BaseSensor ABC + SensorReading dataclass
 │   │   ├── simulated.py         # SimulatedTemperatureSensor
@@ -441,21 +537,26 @@ monitor_app1/
 │   │   │   ├── base.html        # Shared layout and nav bar
 │   │   │   ├── login.html       # Login form
 │   │   │   ├── live.html        # Live sensor table (JS auto-refresh)
-│   │   │   └── history.html     # History filter form + table + CSV link
+│   │   │   ├── history.html     # History filter form + table + CSV link
+│   │   │   ├── photos.html      # Photo browser with Capture Now button
+│   │   │   ├── settings.html    # Settings form (email, camera, DB, polling)
+│   │   │   └── help.html        # README.md rendered as HTML
 │   │   └── static/
 │   │       └── style.css        # Minimal stylesheet, no CDN
 │   ├── alarm_manager.py         # Alarm state tracking + email cooldown logic
 │   ├── camera_manager.py        # Photo capture orchestrator (alarm + periodic)
+│   ├── digital_input_manager.py # Event-driven digital input orchestrator
 │   ├── emailer.py               # SMTP email delivery (stdlib only)
 │   ├── history_db.py            # SQLite persistence (WAL mode)
 │   └── sensor_manager.py        # Loads config, polls sensors, drives alarms
 ├── data/
 │   ├── photos/                  # Captured JPEGs (git-ignored)
 │   └── sensor_history.db        # SQLite database (git-ignored)
-├── config.json                  # Sensor list, polling interval, web/camera settings
+├── config.json                  # Sensor/input list, polling interval, web/camera settings
 ├── main.py                      # Entry point; starts Flask thread then poll loop
 ├── requirements.txt             # Pi production dependencies
 ├── requirements-dev.txt         # Windows dev dependencies
+├── README.md                    # This file
 └── REQUIREMENTS.md              # Full project requirements document
 ```
 

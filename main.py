@@ -4,6 +4,7 @@ import threading
 import time
 
 from monitor.camera_manager import CameraManager
+from monitor.digital_input_manager import DigitalInputManager
 from monitor.emailer import Emailer
 from monitor.sensor_manager import SensorManager
 from monitor.web import create_app
@@ -25,6 +26,10 @@ def main():
     sensor_cfg_by_id = {s["id"]: s for s in config.get("sensors", [])}
 
     sensor_names = {s.sensor_id: s.name for s in manager._sensors}
+
+    di_manager = DigitalInputManager(config, manager._db, camera, emailer)
+    di_manager.start()
+    sensor_names.update(di_manager.input_names)
 
     web_cfg = config.get("web", {})
     flask_config = {
@@ -86,6 +91,7 @@ def main():
     except KeyboardInterrupt:
         print("\nStopped.")
     finally:
+        di_manager.stop()
         manager.close()
         camera.close()
 

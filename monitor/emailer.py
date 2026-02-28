@@ -30,6 +30,25 @@ class Emailer:
     def is_enabled(self) -> bool:
         return self._enabled
 
+    def _send(self, msg, label: str) -> bool:
+        """Open an SMTP connection, send msg, and return True on success."""
+        try:
+            if self._use_ssl:
+                conn = smtplib.SMTP_SSL(self._host, self._port)
+            else:
+                conn = smtplib.SMTP(self._host, self._port)
+                if self._use_tls:
+                    conn.starttls()
+            with conn:
+                if self._username:
+                    conn.login(self._username, self._password)
+                conn.sendmail(self._from, [self._to], msg.as_string())
+            logger.info("Email sent for %s", label)
+            return True
+        except Exception as exc:
+            logger.error("Failed to send email for %s: %s", label, exc)
+            return False
+
     def send_test(self) -> tuple[bool, str]:
         """Send a plain test email. Returns (success, error_message)."""
         if not self._host or not self._to or not self._from:
@@ -139,22 +158,58 @@ class Emailer:
         msg["From"] = self._from
         msg["To"] = self._to
 
-        try:
-            if self._use_ssl:
-                conn = smtplib.SMTP_SSL(self._host, self._port)
-            else:
-                conn = smtplib.SMTP(self._host, self._port)
-                if self._use_tls:
-                    conn.starttls()
+        return self._send(msg, f"sensor '{sensor_name}'")
 
-            with conn:
-                if self._username:
-                    conn.login(self._username, self._password)
-                conn.sendmail(self._from, [self._to], msg.as_string())
+    def send_digital_alert(
+        self,
+        input_name: str,
+        input_id: str,
+        timestamp: datetime,
+        photo_path=None,
+    ) -> bool:
+        """
+        Send an alert email for a digital input trigger event.
 
-            logger.info("Alert email sent for sensor '%s'", sensor_name)
-            return True
-
-        except Exception as exc:
-            logger.error("Failed to send alert email for sensor '%s': %s", sensor_name, exc)
+        Returns True on success, False if disabled / misconfigured / send failed.
+        """
+        if not self._enabled:
             return False
+
+        if not self._host or not self._to or not self._from:
+            logger.warning(
+                "Emailer: smtp_host, from_address, and to_address must all be set"
+            )
+            return False
+
+        ts = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+        subject = f"[{self._app_name} ALARM] {input_name}: triggered"
+        body = (
+            f"Digital input triggered\n\n"
+            f"Input  : {input_name}\n"
+            f"ID     : {input_id}\n"
+            f"Time   : {ts}\n"
+        )
+
+        attach_photo = photo_path and os.path.isfile(photo_path)
+
+        if attach_photo:
+            msg = MIMEMultipart("mixed")
+            msg.attach(MIMEText(body))
+            with open(photo_path, "rb") as img_f:
+                img_data = img_f.read()
+            img_part = MIMEBase("image", "jpeg")
+            img_part.set_payload(img_data)
+            email.encoders.encode_base64(img_part)
+            img_part.add_header(
+                "Content-Disposition",
+                f'attachment; filename="{os.path.basename(photo_path)}"',
+            )
+            msg.attach(img_part)
+        else:
+            msg = MIMEText(body)
+
+        msg["Subject"] = subject
+        msg["From"] = self._from
+        msg["To"] = self._to
+
+        return self._send(msg, f"digital input '{input_name}'")

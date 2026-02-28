@@ -22,6 +22,14 @@
       "alarm_max": 40.0
     }
   ],
+  "digital_inputs": [
+    {
+      "id": "motion_1",
+      "name": "Motion Sensor (simulated)",
+      "type": "simulated",
+      "sim_interval_seconds": 90
+    }
+  ],
   "email": {
     "enabled": true,
     "smtp_host": "smtp.gmail.com",
