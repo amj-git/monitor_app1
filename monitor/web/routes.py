@@ -11,6 +11,8 @@ import re
 import tempfile
 from datetime import datetime
 
+from monitor.emailer import Emailer
+
 from flask import (
     Blueprint,
     Response,
@@ -490,3 +492,25 @@ def api_settings_post():
     _apply_settings(data)
     logger.info("Settings updated via web UI")
     return jsonify({"ok": True})
+
+
+@bp.route("/api/settings/test-email", methods=["POST"])
+@login_required
+def api_settings_test_email():
+    data = request.get_json(force=True)
+    email_data = data.get("email", {})
+    test_emailer = Emailer({
+        "enabled": True,
+        "smtp_host":    email_data.get("smtp_host", ""),
+        "smtp_port":    email_data.get("smtp_port", 587),
+        "use_tls":      email_data.get("use_tls", True),
+        "use_ssl":      email_data.get("use_ssl", False),
+        "username":     email_data.get("username", ""),
+        "password":     email_data.get("password", ""),
+        "from_address": email_data.get("from_address", ""),
+        "to_address":   email_data.get("to_address", ""),
+    })
+    ok, err = test_emailer.send_test()
+    if ok:
+        return jsonify({"ok": True})
+    return jsonify({"ok": False, "error": err}), 500

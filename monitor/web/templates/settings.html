@@ -89,6 +89,8 @@
       <td><input type="email" id="to_address"></td>
     </tr>
   </table>
+  <button onclick="sendTestEmail()">Send Test Email</button>
+  <span id="test-email-status"></span>
 </section>
 
 <button onclick="saveSettings()">Save Settings</button>
@@ -226,6 +228,42 @@ function saveSettings() {
       statusEl.className = "status-ok";
     } else {
       statusEl.textContent = "Error: " + (result.error || "Save failed.");
+      statusEl.className = "status-error";
+    }
+  };
+  xhr.send(JSON.stringify(payload));
+}
+
+function sendTestEmail() {
+  var statusEl = document.getElementById("test-email-status");
+  statusEl.textContent = "Sending...";
+  statusEl.className = "";
+
+  var payload = {
+    email: {
+      smtp_host:    document.getElementById("smtp_host").value,
+      smtp_port:    parseInt(document.getElementById("smtp_port").value, 10),
+      use_tls:      document.getElementById("use_tls").checked,
+      use_ssl:      document.getElementById("use_ssl").checked,
+      username:     document.getElementById("email_username").value,
+      password:     document.getElementById("email_password").value,
+      from_address: document.getElementById("from_address").value,
+      to_address:   document.getElementById("to_address").value
+    }
+  };
+
+  var xhr = new XMLHttpRequest();
+  xhr.open("POST", "/api/settings/test-email", true);
+  xhr.setRequestHeader("Content-Type", "application/json");
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState !== 4) return;
+    var result;
+    try { result = JSON.parse(xhr.responseText); } catch(e) { result = {}; }
+    if (xhr.status === 200 && result.ok) {
+      statusEl.textContent = "Test email sent.";
+      statusEl.className = "status-ok";
+    } else {
+      statusEl.textContent = "Failed: " + (result.error || "Unknown error.");
       statusEl.className = "status-error";
     }
   };

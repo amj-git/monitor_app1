@@ -29,6 +29,33 @@ class Emailer:
     def is_enabled(self) -> bool:
         return self._enabled
 
+    def send_test(self) -> tuple[bool, str]:
+        """Send a plain test email. Returns (success, error_message)."""
+        if not self._host or not self._to or not self._from:
+            return False, "smtp_host, from_address, and to_address must all be set"
+
+        msg = MIMEText("This is a test email from Equipment Monitor.")
+        msg["Subject"] = "[Equipment Monitor] Test Email"
+        msg["From"] = self._from
+        msg["To"] = self._to
+
+        try:
+            if self._use_ssl:
+                conn = smtplib.SMTP_SSL(self._host, self._port)
+            else:
+                conn = smtplib.SMTP(self._host, self._port)
+                if self._use_tls:
+                    conn.starttls()
+            with conn:
+                if self._username:
+                    conn.login(self._username, self._password)
+                conn.sendmail(self._from, [self._to], msg.as_string())
+            logger.info("Test email sent to %s", self._to)
+            return True, ""
+        except Exception as exc:
+            logger.warning("Test email failed: %s", exc)
+            return False, str(exc)
+
     def send_alert(
         self,
         sensor_name: str,
